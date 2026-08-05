@@ -1,9 +1,18 @@
+Exit code: 0
+Wall time: 0.3 seconds
+Output:
 <?php
 // This file is part of Moodle - https://moodle.org/.
 
 defined('MOODLE_INTERNAL') || die();
 
 if ($hassiteconfig) {
+    $settings = new admin_settingpage(
+        'local_courseqbankcopy',
+        get_string('pluginname', 'local_courseqbankcopy'),
+    );
+    $ADMIN->add('localplugins', $settings);
+
     $settings->add(new admin_setting_heading(
         'local_courseqbankcopy/settings',
         get_string('pluginname', 'local_courseqbankcopy'),
@@ -17,3 +26,4 @@ if ($hassiteconfig) {
         0,
     ));
 }
+
