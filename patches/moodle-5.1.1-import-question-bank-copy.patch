@@ -1,5 +1,5 @@
 Exit code: 0
-Wall time: 0.3 seconds
+Wall time: 0.4 seconds
 Output:
 diff --git a/public/backup/moodle2/backup_root_task.class.php b/public/backup/moodle2/backup_root_task.class.php
 --- a/public/backup/moodle2/backup_root_task.class.php
@@ -26,7 +26,22 @@ diff --git a/public/backup/import.php b/public/backup/import.php
 +    if (!has_capability('local/courseqbankcopy:choosereusemode', $context)) {
 +        $questionbankcopysetting->set_status(backup_setting::LOCKED_BY_CONFIG);
 +    }
-@@ -141,6 +145,13 @@ if ($backup->get_stage() == backup_ui::STAGE_FINAL) {
+     $settings = $bc->get_plan()->get_settings();
+@@ -104,7 +108,12 @@ if (!($bc = backup_ui::load_controller($backupid))) {
+     $visiblesettings = false;
+     foreach ($settings as $setting) {
+         if ($setting->get_status() !== backup_setting::NOT_LOCKED) {
+-            $setting->set_visibility(backup_setting::HIDDEN);
++            if ($setting->get_name() === 'questionbankcopy') {
++                // Keep the enforced copy setting visible to explain the import behaviour.
++                $visiblesettings = true;
++            } else {
++                $setting->set_visibility(backup_setting::HIDDEN);
++            }
+         } else {
+             $visiblesettings = true;
+         }
+@@ -141,6 +150,13 @@ if ($backup->get_stage() == backup_ui::STAGE_FINAL) {
      $backup->execute();
 +    $requestedmode = $backup->get_controller()->get_plan()->get_setting('questionbankcopy')->get_value() ? 'copy' : 'reuse';
 +    $questionbankcopy = component_class_callback(
@@ -35,7 +50,7 @@ diff --git a/public/backup/import.php b/public/backup/import.php
 +        [$requestedmode, $context],
 +        $requestedmode,
 +    ) === 'copy';
-@@ -160,6 +171,14 @@ if ($backup->get_stage() == backup_ui::STAGE_FINAL) {
+@@ -160,6 +176,14 @@ if ($backup->get_stage() == backup_ui::STAGE_FINAL) {
      $rc = new restore_controller($backupid, $course->id, backup::INTERACTIVE_YES, backup::MODE_IMPORT, $USER->id, $restoretarget);
 +    restore_dbops::set_backup_ids_record(
 +        $backupid,
@@ -61,4 +76,5 @@ diff --git a/public/backup/util/dbops/restore_dbops.class.php b/public/backup/ut
 -                if ($targetcontext) {
 +                if ($targetcontext && !$questionbankcopy) {
                      $matchcat = $DB->get_record('question_categories', [
+
 
