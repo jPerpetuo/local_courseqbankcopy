@@ -41,6 +41,14 @@ diff --git a/public/backup/import.php b/public/backup/import.php
          } else {
              $visiblesettings = true;
          }
+@@ -115,6 +124,12 @@ if (!($bc = backup_ui::load_controller($backupid))) {
+     import_ui::skip_current_stage(!$visiblesettings);
+ }
++if ($bc->get_plan()->setting_exists('questionbankcopy')) {
++    $bc->get_plan()->get_setting('questionbankcopy')->set_visibility(backup_setting::VISIBLE);
++}
++
+ // Prepare the import UI
 @@ -141,6 +150,13 @@ if ($backup->get_stage() == backup_ui::STAGE_FINAL) {
      $backup->execute();
 +    $requestedmode = $backup->get_controller()->get_plan()->get_setting('questionbankcopy')->get_value() ? 'copy' : 'reuse';
@@ -76,5 +84,4 @@ diff --git a/public/backup/util/dbops/restore_dbops.class.php b/public/backup/ut
 -                if ($targetcontext) {
 +                if ($targetcontext && !$questionbankcopy) {
                      $matchcat = $DB->get_record('question_categories', [
-
 
