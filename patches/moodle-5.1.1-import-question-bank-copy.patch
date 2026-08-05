@@ -1,5 +1,5 @@
 Exit code: 0
-Wall time: 0.4 seconds
+Wall time: 0.3 seconds
 Output:
 diff --git a/public/backup/moodle2/backup_root_task.class.php b/public/backup/moodle2/backup_root_task.class.php
 --- a/public/backup/moodle2/backup_root_task.class.php
@@ -11,7 +11,7 @@ diff --git a/public/backup/moodle2/backup_root_task.class.php b/public/backup/mo
 +            $questionbankcopy = new backup_generic_setting('questionbankcopy', base_setting::IS_BOOLEAN, true);
 +            $questionbankcopy->set_ui(new backup_setting_ui_checkbox(
 +                $questionbankcopy,
-+                get_string('rootsettingquestionbankcopy', 'backup'),
++                get_string('copyquestions', 'local_courseqbankcopy'),
 +            ));
 +            $this->add_setting($questionbankcopy);
          }
@@ -61,11 +61,4 @@ diff --git a/public/backup/util/dbops/restore_dbops.class.php b/public/backup/ut
 -                if ($targetcontext) {
 +                if ($targetcontext && !$questionbankcopy) {
                      $matchcat = $DB->get_record('question_categories', [
-diff --git a/public/lang/en/backup.php b/public/lang/en/backup.php
---- a/public/lang/en/backup.php
-+++ b/public/lang/en/backup.php
-@@ -372,6 +372,7 @@ $string['rootsettingusers'] = 'Include enrolled users';
- $string['rootsettingpermissions'] = 'Include permission overrides';
-+$string['rootsettingquestionbankcopy'] = 'Copy question banks to this course';
-
 
