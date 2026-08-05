@@ -1,0 +1,71 @@
+Exit code: 0
+Wall time: 0.4 seconds
+Output:
+diff --git a/public/backup/moodle2/backup_root_task.class.php b/public/backup/moodle2/backup_root_task.class.php
+--- a/public/backup/moodle2/backup_root_task.class.php
++++ b/public/backup/moodle2/backup_root_task.class.php
+@@ -104,6 +104,14 @@ class backup_root_task extends backup_task {
+             $permissions->set_ui(new backup_setting_ui_checkbox($permissions, get_string('rootsettingpermissions', 'backup')));
+             $this->add_setting($permissions);
++
++            $questionbankcopy = new backup_generic_setting('questionbankcopy', base_setting::IS_BOOLEAN, true);
++            $questionbankcopy->set_ui(new backup_setting_ui_checkbox(
++                $questionbankcopy,
++                get_string('rootsettingquestionbankcopy', 'backup'),
++            ));
++            $this->add_setting($questionbankcopy);
+         }
+diff --git a/public/backup/import.php b/public/backup/import.php
+--- a/public/backup/import.php
++++ b/public/backup/import.php
+@@ -94,6 +94,10 @@ if (!($bc = backup_ui::load_controller($backupid))) {
+     $bc = new backup_controller(backup::TYPE_1COURSE, $importcourse->id, backup::FORMAT_MOODLE,
+                             backup::INTERACTIVE_YES, backup::MODE_IMPORT, $USER->id);
+     $bc->get_plan()->get_setting('users')->set_status(backup_setting::LOCKED_BY_CONFIG);
++    $questionbankcopysetting = $bc->get_plan()->get_setting('questionbankcopy');
++    if (!has_capability('local/courseqbankcopy:choosereusemode', $context)) {
++        $questionbankcopysetting->set_status(backup_setting::LOCKED_BY_CONFIG);
++    }
+@@ -141,6 +145,13 @@ if ($backup->get_stage() == backup_ui::STAGE_FINAL) {
+     $backup->execute();
++    $requestedmode = $backup->get_controller()->get_plan()->get_setting('questionbankcopy')->get_value() ? 'copy' : 'reuse';
++    $questionbankcopy = component_class_callback(
++        '\\local_courseqbankcopy\\local\\import_mode',
++        'resolve',
++        [$requestedmode, $context],
++        $requestedmode,
++    ) === 'copy';
+@@ -160,6 +171,14 @@ if ($backup->get_stage() == backup_ui::STAGE_FINAL) {
+     $rc = new restore_controller($backupid, $course->id, backup::INTERACTIVE_YES, backup::MODE_IMPORT, $USER->id, $restoretarget);
++    restore_dbops::set_backup_ids_record(
++        $backupid,
++        'questionbankcopy',
++        0,
++        0,
++        null,
++        (object) ['enabled' => $questionbankcopy],
++    );
+diff --git a/public/backup/util/dbops/restore_dbops.class.php b/public/backup/util/dbops/restore_dbops.class.php
+--- a/public/backup/util/dbops/restore_dbops.class.php
++++ b/public/backup/util/dbops/restore_dbops.class.php
+@@ -607,6 +607,11 @@ abstract class restore_dbops {
+         $errors = [];
+         $warnings = [];
++        $questionbankcopy = false;
++        if ($setting = self::get_backup_ids_record($restoreid, 'questionbankcopy', 0)) {
++            $questionbankcopy = !empty($setting->info->enabled);
++        }
+@@ -664,7 +669,7 @@ abstract class restore_dbops {
+                 }
+                 $matchcat = false;
+-                if ($targetcontext) {
++                if ($targetcontext && !$questionbankcopy) {
+                     $matchcat = $DB->get_record('question_categories', [
+diff --git a/public/lang/en/backup.php b/public/lang/en/backup.php
+--- a/public/lang/en/backup.php
++++ b/public/lang/en/backup.php
+@@ -372,6 +372,7 @@ $string['rootsettingusers'] = 'Include enrolled users';
+ $string['rootsettingpermissions'] = 'Include permission overrides';
++$string['rootsettingquestionbankcopy'] = 'Copy question banks to this course';
+
+
