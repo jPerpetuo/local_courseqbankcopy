@@ -1,0 +1,169 @@
+diff --git a/public/backup/moodle2/backup_root_task.class.php b/public/backup/moodle2/backup_root_task.class.php
+--- a/public/backup/moodle2/backup_root_task.class.php
++++ b/public/backup/moodle2/backup_root_task.class.php
+@@ -104,6 +104,14 @@ class backup_root_task extends backup_task {
+             $permissions->set_ui(new backup_setting_ui_checkbox($permissions, get_string('rootsettingpermissions', 'backup')));
+             $this->add_setting($permissions);
++
++            $questionbankcopy = new backup_generic_setting('questionbankcopy', base_setting::IS_BOOLEAN, true);
++            $questionbankcopy->set_ui(new backup_setting_ui_checkbox(
++                $questionbankcopy,
++                get_string('copyquestions', 'local_courseqbankcopy'),
++            ));
++            $this->add_setting($questionbankcopy);
+         }
+diff --git a/public/backup/import.php b/public/backup/import.php
+--- a/public/backup/import.php
++++ b/public/backup/import.php
+@@ -94,6 +94,10 @@ if (!($bc = backup_ui::load_controller($backupid))) {
+     $bc = new backup_controller(backup::TYPE_1COURSE, $importcourse->id, backup::FORMAT_MOODLE,
+                             backup::INTERACTIVE_YES, backup::MODE_IMPORT, $USER->id);
+     $bc->get_plan()->get_setting('users')->set_status(backup_setting::LOCKED_BY_CONFIG);
++    $questionbankcopysetting = $bc->get_plan()->get_setting('questionbankcopy');
++    if (!has_capability('local/courseqbankcopy:choosereusemode', $context)) {
++        $questionbankcopysetting->set_status(backup_setting::LOCKED_BY_CONFIG);
++    }
+     $settings = $bc->get_plan()->get_settings();
+@@ -104,7 +108,12 @@ if (!($bc = backup_ui::load_controller($backupid))) {
+     $visiblesettings = false;
+     foreach ($settings as $setting) {
+         if ($setting->get_status() !== backup_setting::NOT_LOCKED) {
+-            $setting->set_visibility(backup_setting::HIDDEN);
++            if ($setting->get_name() === 'questionbankcopy') {
++                // Keep the enforced copy setting visible to explain the import behaviour.
++                $visiblesettings = true;
++            } else {
++                $setting->set_visibility(backup_setting::HIDDEN);
++            }
+         } else {
+             $visiblesettings = true;
+         }
+@@ -115,6 +124,12 @@ if (!($bc = backup_ui::load_controller($backupid))) {
+     import_ui::skip_current_stage(!$visiblesettings);
+ }
++if ($bc->get_plan()->setting_exists('questionbankcopy')) {
++    $bc->get_plan()->get_setting('questionbankcopy')->set_visibility(backup_setting::VISIBLE);
++}
++
+ // Prepare the import UI
+@@ -141,6 +150,13 @@ if ($backup->get_stage() == backup_ui::STAGE_FINAL) {
+     $backup->execute();
++    $requestedmode = $backup->get_controller()->get_plan()->get_setting('questionbankcopy')->get_value() ? 'copy' : 'reuse';
++    $questionbankcopy = component_class_callback(
++        '\\local_courseqbankcopy\\local\\import_mode',
++        'resolve',
++        [$requestedmode, $context],
++        $requestedmode,
++    ) === 'copy';
+@@ -160,6 +176,14 @@ if ($backup->get_stage() == backup_ui::STAGE_FINAL) {
+     $rc = new restore_controller($backupid, $course->id, backup::INTERACTIVE_YES, backup::MODE_IMPORT, $USER->id, $restoretarget);
++    restore_dbops::set_backup_ids_record(
++        $backupid,
++        'questionbankcopy',
++        0,
++        0,
++        null,
++        (object) ['enabled' => $questionbankcopy],
++    );
+diff --git a/public/backup/util/dbops/restore_dbops.class.php b/public/backup/util/dbops/restore_dbops.class.php
+--- a/public/backup/util/dbops/restore_dbops.class.php
++++ b/public/backup/util/dbops/restore_dbops.class.php
+@@ -607,6 +607,11 @@ abstract class restore_dbops {
+         $errors = [];
+         $warnings = [];
++        $questionbankcopy = false;
++        if ($setting = self::get_backup_ids_record($restoreid, 'questionbankcopy', 0)) {
++            $questionbankcopy = !empty($setting->info->enabled);
++        }
+@@ -664,7 +669,7 @@ abstract class restore_dbops {
+                 }
+                 $matchcat = false;
+-                if ($targetcontext) {
++                if ($targetcontext && !$questionbankcopy) {
+                     $matchcat = $DB->get_record('question_categories', [
+
+diff --git a/public/backup/moodle2/restore_stepslib.php b/public/backup/moodle2/restore_stepslib.php
+--- a/public/backup/moodle2/restore_stepslib.php
++++ b/public/backup/moodle2/restore_stepslib.php
+@@ -5546,6 +5546,11 @@ class restore_move_module_questions_categories extends restore_execution_step {
+    protected function define_execution() {
+        global $DB;
+
+        $after35 = $this->task->backup_release_compare('3.5', '>=') && $this->task->backup_version_compare(20180205, '>');
++        $questionbankcopy = false;
++        if ($setting = restore_dbops::get_backup_ids_record($this->get_restoreid(), 'questionbankcopy', 0)) {
++            $questionbankcopy = !empty($setting->info->enabled);
++        }
++
+        $contexts = restore_dbops::restore_get_question_banks($this->get_restoreid(), CONTEXT_MODULE);
+        foreach ($contexts as $contextid => $contextlevel) {
+@@ -5556,6 +5561,7 @@ class restore_move_module_questions_categories extends restore_execution_step {
+                // to the originals.
+                $originalcontext = context::instance_by_id($contextid, IGNORE_MISSING);
+                if (
++                    !$questionbankcopy &&
+                    $this->task->is_samesite()
+                    && $originalcontext
+                    && has_capability('mod/qbank:view', $originalcontext)
+@@ -5600,6 +5606,7 @@ class restore_move_module_questions_categories extends restore_execution_step {
+            $top = question_get_top_category($newcontext->newitemid, true);
+            $oldtopid = 0;
+            $categoryids = [];
++            $categorymappings = [];
+            foreach ($modulecats as $modulecat) {
+                // Before 3.5, question categories could be created at top level.
+                // From 3.5 onwards, all question categories should be a child of a special category called the "top" category.
+@@ -5633,8 +5640,56 @@ class restore_move_module_questions_categories extends restore_execution_step {
+                    $modulecat->newitemid,
+                    $newcontext->newitemid
+                );
++                $categorymappings[$modulecat->itemid] = $modulecat->newitemid;
+            }
+
++            // The standard same-site import intentionally retains references to an accessible
++            // source question bank. In copy mode, retarget imported random-question slots to
++            // the copied category and its destination question-bank context instead.
++            if ($questionbankcopy && $categorymappings) {
++                $references = $DB->get_records_sql(
++                    "SELECT qsr.id, qsr.filtercondition
++                       FROM {question_set_references} qsr
++                       JOIN {backup_ids_temp} bi ON bi.newitemid = qsr.itemid
++                      WHERE bi.backupid = :backupid
++                        AND bi.itemname = :itemname
++                        AND qsr.component = :component
++                        AND qsr.questionarea = :questionarea
++                        AND qsr.questionscontextid = :questionscontextid",
++                    [
++                        'backupid' => $this->get_restoreid(),
++                        'itemname' => 'quiz_question_instance',
++                        'component' => 'mod_quiz',
++                        'questionarea' => 'slot',
++                        'questionscontextid' => $contextid,
++                    ],
++                );
++                foreach ($references as $reference) {
++                    $filtercondition = json_decode($reference->filtercondition, true);
++                    if (!isset($filtercondition['filter'])) {
++                        $filtercondition = \core_question\question_reference_manager::
++                            convert_legacy_set_reference_filter_condition($filtercondition);
++                    }
++                    $oldcategoryid = $filtercondition['filter']['category']['values'][0] ?? null;
++                    if (!isset($categorymappings[$oldcategoryid])) {
++                        continue;
++                    }
++                    $filtercondition['filter']['category']['values'][0] = $categorymappings[$oldcategoryid];
++                    $filtercondition['cat'] = implode(',', [
++                        $categorymappings[$oldcategoryid],
++                        $newcontext->newitemid,
++                    ]);
++                    $DB->update_record('question_set_references', (object) [
++                        'id' => $reference->id,
++                        'questionscontextid' => $newcontext->newitemid,
++                        'filtercondition' => json_encode($filtercondition),
++                    ]);
++                }
++            }
++
+            // Update the context id of any tags applied to any questions in these categories.
+            if ($categoryids) {
+
