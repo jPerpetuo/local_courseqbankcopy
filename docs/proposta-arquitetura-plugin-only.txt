@@ -1,0 +1,194 @@
+PROPOSTA TÉCNICA
+CÓPIA INDEPENDENTE DE BANCOS DE QUESTÕES NA IMPORTAÇÃO DE CURSOS
+
+Componente: local_courseqbankcopy
+Versões-alvo: Moodle 5.1.1 e Moodle 5.2.1
+Estado: arquitetura implementada em versão alpha, ainda sujeita à matriz completa de homologação
+
+
+1. CONTEXTO E PROBLEMA
+
+A universidade mantém no Moodle de produção apenas os cursos do semestre vigente e do semestre anterior. Cursos mais antigos são enviados para um repositório e posteriormente removidos da produção.
+
+A partir das mudanças recentes no banco de questões do Moodle, uma importação feita em Curso > Reutilizar > Importar pode reaproveitar categorias, questões e entradas existentes no curso de origem. Assim, um questionário do novo semestre pode continuar referenciando o banco do curso antigo.
+
+Esse comportamento é incompatível com a política de arquivamento da universidade: quando o curso antigo é removido, o curso novo deve continuar com suas próprias categorias, questões, versões, arquivos e referências.
+
+
+2. OBJETIVO
+
+Manter o fluxo nativo de importação do Moodle e oferecer dois modos:
+
+- Copiar bancos de questões para este curso: comportamento padrão e obrigatório para professores comuns.
+- Reutilizar bancos de questões existentes: disponível somente para perfis autorizados e quando habilitado por um administrador.
+
+No modo de cópia, a exclusão do curso de origem não pode afetar os questionários nem o banco de questões do curso de destino.
+
+
+3. RESTRIÇÃO DE ARQUITETURA
+
+A solução deve estar integralmente em public/local/courseqbankcopy. Nenhum arquivo de public/backup, mod/quiz, mod/qbank ou de outro componente do Moodle deve ser editado.
+
+Plugins locais podem personalizar o Moodle por callbacks, hooks, eventos e APIs públicas. Eles não conseguem substituir arbitrariamente uma classe ou um método do núcleo que já tenha sido carregado. Como o Moodle 5.1/5.2 não fornece um hook interrompível no ponto exato da decisão entre mapear e criar questões, a solução atua no ciclo imediatamente anterior e posterior ao restore.
+
+
+4. SOLUÇÃO PROPOSTA
+
+Fluxo resumido:
+
+Importação nativa
+  -> backup temporário
+  -> interceptação síncrona do plugin
+  -> transformação de identidades das categorias
+  -> restore nativo do Moodle
+  -> reconciliação das referências
+  -> validação de independência
+
+4.1 Interface
+
+Um hook de saída carrega um módulo JavaScript AMD somente em /backup/import.php. Esse módulo adiciona a opção de cópia à interface nativa e envia o modo escolhido em todas as etapas da importação.
+
+Para usuários sem a capability local/courseqbankcopy:choosereusemode, a cópia permanece marcada e bloqueada. Para usuários autorizados, a escolha de reutilização depende também da configuração administrativa do plugin.
+
+Quando o modo de cópia está ativo, o JavaScript mantém selecionados os módulos qbank apresentados na configuração do esquema.
+
+4.2 Interceptação antes do restore
+
+Ao terminar o backup temporário, o Moodle dispara o evento course_backup_created. Esse evento é síncrono: o processo de importação aguarda o observador terminar antes de criar e executar o controlador de restore.
+
+O observador do plugin filtra somente operações MODE_IMPORT no formato nativo do Moodle. Em seguida:
+
+- confirma o curso de origem e o curso de destino;
+- confirma que o modo solicitado é copy;
+- verifica se todos os módulos qbank do curso de origem foram incluídos;
+- cria um identificador único para a operação;
+- transforma de forma atômica os stamps das categorias no questions.xml temporário.
+
+O Moodle usa o stamp para identificar uma categoria já existente. Ao receber stamps novos, o pré-processamento nativo deixa de mapear essas categorias para o banco anterior e passa a criar categorias, entradas, versões e questões novas.
+
+A transformação é feita por streaming, sem carregar todo o questions.xml em memória. Isso é importante para bancos grandes.
+
+4.3 Preservação dos mapeamentos
+
+Durante o restore, o Moodle mantém os pares de IDs antigos e novos em backup_ids_temp. Essa tabela temporária é removida antes do evento course_restored.
+
+Para não perder os pares necessários, o plugin usa a integração oficial de plugins locais com a Backup/Restore API. Pequenos marcadores, sem conteúdo pessoal, são incluídos abaixo de cada módulo e questão no pacote.
+
+Enquanto o restore processa esses marcadores, o plugin registra:
+
+- módulo de origem -> módulo importado;
+- categoria de origem -> categoria copiada;
+- entrada do banco de origem -> nova entrada do banco.
+
+Esses dados ficam temporariamente nas tabelas local_cqbc_operation e local_cqbc_mapping.
+
+4.4 Reconciliação depois do restore
+
+No evento course_restored, o plugin já conhece os módulos importados e os bancos copiados. Ele atualiza somente as referências pertencentes aos módulos que acabaram de ser importados.
+
+São tratados dois grupos:
+
+- question_references: questões fixas adicionadas aos questionários;
+- question_set_references: perguntas aleatórias baseadas em categoria e filtros.
+
+As referências fixas passam a usar o novo questionbankentryid. As referências aleatórias passam a usar a nova categoria e o novo contexto de banco.
+
+4.5 Validação final
+
+Antes de considerar a operação concluída, o plugin verifica:
+
+- se algum módulo importado ainda aponta para uma entrada do banco de origem;
+- se todas as categorias esperadas receberam um destino;
+- se as categorias copiadas pertencem ao contexto do curso de destino.
+
+Se a preparação falhar antes do restore, a importação é interrompida. Se a reconciliação final falhar, a operação é marcada como falha e o usuário recebe uma mensagem orientando a análise administrativa. Como o evento final ocorre depois da gravação do curso, uma falha nessa etapa não desfaz automaticamente toda a importação.
+
+
+5. ESCOPO DOS DADOS COPIADOS
+
+A criação efetiva continua sendo feita pelo restore nativo do Moodle. Isso evita implementar manualmente as tabelas específicas de cada tipo de questão.
+
+O contrato de independência inclui:
+
+- módulos de banco de questões;
+- categorias e subcategorias;
+- entradas do banco de questões;
+- versões das questões;
+- dados principais das questões;
+- respostas, alternativas e dados específicos dos tipos;
+- arquivos incorporados;
+- referências de questões fixas;
+- referências de perguntas aleatórias por categoria.
+
+Para garantir o banco inteiro, todos os módulos qbank do curso de origem são obrigatórios no pacote. Se algum estiver ausente, o plugin interrompe a preparação em vez de produzir uma cópia parcial silenciosa.
+
+
+6. IMPACTO EM ATUALIZAÇÕES DO MOODLE
+
+Uma atualização do Moodle não sobrescreve os arquivos do plugin. Não será necessário reaplicar manualmente alterações em restore_stepslib.php, restore_dbops.class.php, import.php ou backup_root_task.class.php.
+
+Entretanto, a solução transforma um arquivo temporário do formato interno de backup e acompanha estruturas de referência do banco de questões. Por isso, uma nova versão principal do Moodle ainda exige testes de compatibilidade. O plugin deve bloquear de forma segura versões fora da faixa declarada, em vez de continuar silenciosamente com um formato desconhecido.
+
+O patch experimental usado na primeira prova de conceito deve ser removido do ambiente antes da homologação desta arquitetura.
+
+
+7. RISCOS E CONTROLES
+
+Risco: mudança no formato de questions.xml.
+Controle: testes automatizados, faixa de versões suportadas e interrupção segura quando o manifesto ou XML não forem reconhecidos.
+
+Risco: banco qbank não selecionado pelo usuário.
+Controle: seleção automática na interface e validação obrigatória do manifesto antes do restore.
+
+Risco: importações simultâneas.
+Controle: cada operação usa o backupid/restoreid e um token aleatório próprios. Os mapas possuem unicidade por operação, tipo e ID de origem.
+
+Risco: crescimento das tabelas auxiliares.
+Controle: tarefa agendada diária remove operações concluídas ou com falha após 30 dias.
+
+Risco: tipo de questão de terceiros com comportamento próprio de backup.
+Controle: a criação continua sob responsabilidade do restore nativo; mesmo assim, cada tipo instalado deve participar da homologação.
+
+Risco: erro depois que o restore já gravou os dados.
+Controle: transação na reconciliação, status de falha, mensagem explícita e proibição de considerar a importação homologada sem a validação final.
+
+
+8. CRITÉRIOS DE ACEITAÇÃO
+
+A solução será considerada pronta para produção quando:
+
+1. editar uma questão no curso antigo não alterar a cópia no curso novo;
+2. editar uma questão no curso novo não alterar a origem;
+3. excluir o curso antigo não quebrar o banco nem os questionários novos;
+4. questões fixas usarem questionbankentryid do banco novo;
+5. perguntas aleatórias usarem categoria e contexto do banco novo;
+6. categorias, subcategorias, versões e arquivos forem preservados;
+7. a cópia do banco inteiro ocorrer mesmo para questões ainda não usadas em questionários;
+8. o modo de reutilização continuar funcionando apenas para usuários autorizados;
+9. importações concorrentes não misturarem mapeamentos;
+10. Moodle 5.1.1 e 5.2.1 passarem pela mesma matriz de testes.
+
+
+9. PONTOS DE EXTENSÃO E REFERÊNCIAS
+
+Hooks API do Moodle 5.2:
+https://moodledev.io/docs/5.2/apis/core/hooks
+
+Backup API do Moodle 5.2:
+https://moodledev.io/docs/5.2/apis/subsystems/backup
+
+Evento criado ao final do backup:
+public/backup/util/plan/backup_plan.class.php
+
+Decisão nativa entre mapear e criar bancos/categorias:
+public/backup/util/dbops/restore_dbops.class.php
+
+Tratamento nativo das referências de questões:
+public/backup/moodle2/restore_stepslib.php
+
+
+10. CONCLUSÃO
+
+A arquitetura elimina a manutenção de alterações hardcoded no núcleo e mantém o fluxo de experiência do usuário. O plugin não substitui classes do Moodle; ele usa o ciclo nativo de backup/restore, transforma o pacote temporário antes do restore, conserva os mapeamentos necessários e corrige as referências ao final.
+
+Essa é uma solução plugin-only, mas não significa manutenção zero: a compatibilidade do formato temporário e das estruturas de referência deve ser homologada em cada nova versão principal do Moodle.

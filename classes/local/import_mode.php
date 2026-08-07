@@ -32,12 +32,15 @@ final class import_mode {
      * @return string
      */
     public static function resolve(?string $requestedmode, \context_course $context): string {
-        if ($requestedmode === self::REUSE
-                && get_config('local_courseqbankcopy', 'allowreuseselection')
-                && has_capability('local/courseqbankcopy:choosereusemode', $context)) {
+        $canreuse = is_siteadmin()
+            || (get_config('local_courseqbankcopy', 'allowreuseselection')
+                && has_capability('local/courseqbankcopy:choosereusemode', $context));
+
+        if ($requestedmode === self::REUSE && $canreuse) {
             return self::REUSE;
         }
 
         return self::COPY;
     }
+
 }

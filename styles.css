@@ -1,0 +1,4 @@
+/* Alinha a opção do plugin às configurações nativas da importação. */
+.path-backup #local-courseqbankcopy-option {
+    padding-left: calc(var(--bs-gutter-x, 1.5rem) * 0.5);
+}
