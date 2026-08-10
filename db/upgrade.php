@@ -90,5 +90,34 @@ function xmldb_local_courseqbankcopy_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026080702, 'local', 'courseqbankcopy');
     }
 
+    if ($oldversion < 2026081000) {
+        $tablerenamings = [
+            [new xmldb_table('local_cqbc_operation'), new xmldb_table('local_courseqbankcopy_ops')],
+            [new xmldb_table('local_cqbc_mapping'), new xmldb_table('local_courseqbankcopy_map')],
+        ];
+
+        // Check every table before changing anything, so a name collision cannot hide existing data.
+        foreach ($tablerenamings as [$oldtable, $newtable]) {
+            $oldexists = $dbman->table_exists($oldtable);
+            $newexists = $dbman->table_exists($newtable);
+
+            if ($oldexists && $newexists) {
+                throw new ddl_exception('ddltablealreadyexists', $newtable->getName());
+            }
+
+            if (!$oldexists && !$newexists) {
+                throw new ddl_table_missing_exception($oldtable->getName());
+            }
+        }
+
+        foreach ($tablerenamings as [$oldtable, $newtable]) {
+            if ($dbman->table_exists($oldtable)) {
+                $dbman->rename_table($oldtable, $newtable->getName());
+            }
+        }
+
+        upgrade_plugin_savepoint(true, 2026081000, 'local', 'courseqbankcopy');
+    }
+
     return true;
 }

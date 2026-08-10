@@ -49,4 +49,4 @@ Testar todos os tipos instalados na universidade. No mínimo:
 
 Depois da importação, consultar `question_references` e `question_set_references` para confirmar que os contextos usados pelos módulos importados não apontam para entradas ou categorias do curso de origem.
 
-Confirmar também que a operação correspondente em `local_cqbc_operation` terminou com o status `complete`.
+Confirmar também que a operação correspondente em `local_courseqbankcopy_ops` terminou com o status `complete`.

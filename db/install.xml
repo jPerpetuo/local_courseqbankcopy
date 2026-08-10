@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<XMLDB PATH="local/courseqbankcopy/db" VERSION="2026080600" COMMENT="Tables for the independent question bank copy plugin"
+<XMLDB PATH="local/courseqbankcopy/db" VERSION="2026081000" COMMENT="Tables for the independent question bank copy plugin"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xsi:noNamespaceSchemaLocation="../../../lib/xmldb/xmldb.xsd">
   <TABLES>
-    <TABLE NAME="local_cqbc_operation" COMMENT="Course import operations intercepted by the plugin">
+    <TABLE NAME="local_courseqbankcopy_ops" COMMENT="Course import operations intercepted by the plugin">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="restoreid" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false"/>
@@ -26,7 +26,7 @@
         <INDEX NAME="source-target" UNIQUE="false" FIELDS="sourcecourseid,targetcourseid"/>
       </INDEXES>
     </TABLE>
-    <TABLE NAME="local_cqbc_mapping" COMMENT="Persistent mappings between source and target objects">
+    <TABLE NAME="local_courseqbankcopy_map" COMMENT="Persistent mappings between source and target objects">
       <FIELDS>
         <FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
         <FIELD NAME="restoreid" TYPE="char" LENGTH="32" NOTNULL="true" SEQUENCE="false"/>

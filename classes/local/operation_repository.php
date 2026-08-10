@@ -69,7 +69,7 @@ final class operation_repository {
         global $DB;
 
         $now = time();
-        $record = $DB->get_record('local_cqbc_operation', ['restoreid' => $restoreid]);
+        $record = $DB->get_record('local_courseqbankcopy_ops', ['restoreid' => $restoreid]);
         if ($record) {
             $record->sourcecourseid = $sourcecourseid;
             $record->targetcourseid = $targetcourseid;
@@ -79,8 +79,8 @@ final class operation_repository {
             $record->questioncount = 0;
             $record->lasterror = null;
             $record->timemodified = $now;
-            $DB->update_record('local_cqbc_operation', $record);
-            $DB->delete_records('local_cqbc_mapping', ['restoreid' => $restoreid]);
+            $DB->update_record('local_courseqbankcopy_ops', $record);
+            $DB->delete_records('local_courseqbankcopy_map', ['restoreid' => $restoreid]);
             return $record;
         }
 
@@ -96,7 +96,7 @@ final class operation_repository {
             'timecreated' => $now,
             'timemodified' => $now,
         ];
-        $record->id = $DB->insert_record('local_cqbc_operation', $record);
+        $record->id = $DB->insert_record('local_courseqbankcopy_ops', $record);
         return $record;
     }
 
@@ -109,7 +109,7 @@ final class operation_repository {
     public static function get(string $restoreid): ?\stdClass {
         global $DB;
 
-        return $DB->get_record('local_cqbc_operation', ['restoreid' => $restoreid]) ?: null;
+        return $DB->get_record('local_courseqbankcopy_ops', ['restoreid' => $restoreid]) ?: null;
     }
 
     /**
@@ -132,7 +132,7 @@ final class operation_repository {
                   AND targetcourseid = :targetcourseid
                   AND (status = :prepared OR status = :restoring)";
         $records = $DB->get_records_select(
-            'local_cqbc_operation',
+            'local_courseqbankcopy_ops',
             $sql,
             $params,
             'timemodified DESC',
@@ -162,7 +162,7 @@ final class operation_repository {
         global $DB;
 
         $record = (object) [
-            'id' => $DB->get_field('local_cqbc_operation', 'id', ['restoreid' => $restoreid], MUST_EXIST),
+            'id' => $DB->get_field('local_courseqbankcopy_ops', 'id', ['restoreid' => $restoreid], MUST_EXIST),
             'status' => $status,
             'lasterror' => $error,
             'timemodified' => time(),
@@ -173,7 +173,7 @@ final class operation_repository {
         if ($questioncount !== null) {
             $record->questioncount = $questioncount;
         }
-        $DB->update_record('local_cqbc_operation', $record);
+        $DB->update_record('local_courseqbankcopy_ops', $record);
     }
 
     /**
@@ -200,18 +200,18 @@ final class operation_repository {
 
         $conditions = ['restoreid' => $restoreid, 'itemtype' => $itemtype, 'oldid' => $oldid];
         $now = time();
-        $existing = $DB->get_record('local_cqbc_mapping', $conditions);
+        $existing = $DB->get_record('local_courseqbankcopy_map', $conditions);
         if ($existing) {
             $existing->newid = $newid ?: $existing->newid;
             $existing->oldparentid = $oldparentid ?: $existing->oldparentid;
             $existing->newparentid = $newparentid ?: $existing->newparentid;
             $existing->marker = $marker ?? $existing->marker;
             $existing->timemodified = $now;
-            $DB->update_record('local_cqbc_mapping', $existing);
+            $DB->update_record('local_courseqbankcopy_map', $existing);
             return;
         }
 
-        $DB->insert_record('local_cqbc_mapping', (object) [
+        $DB->insert_record('local_courseqbankcopy_map', (object) [
             'restoreid' => $restoreid,
             'itemtype' => $itemtype,
             'oldid' => $oldid,
@@ -235,7 +235,7 @@ final class operation_repository {
         global $DB;
 
         return $DB->get_records(
-            'local_cqbc_mapping',
+            'local_courseqbankcopy_map',
             ['restoreid' => $restoreid, 'itemtype' => $itemtype],
             '',
             '*',

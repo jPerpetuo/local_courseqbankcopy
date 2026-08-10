@@ -87,7 +87,7 @@ XML;
         $this->assertStringNotContainsString('stamp-two', $transformed);
         $this->assertSame(
             2,
-            $DB->count_records('local_cqbc_mapping', [
+            $DB->count_records('local_courseqbankcopy_map', [
                 'restoreid' => $restoreid,
                 'itemtype' => operation_repository::TYPE_CATEGORY,
             ]),

@@ -51,15 +51,15 @@ final class cleanup_operations extends \core\task\scheduled_task {
             'failed' => operation_repository::STATUS_FAILED,
         ];
         $operations = $DB->get_records_select(
-            'local_cqbc_operation',
+            'local_courseqbankcopy_ops',
             'timemodified < :cutoff AND (status = :complete OR status = :failed)',
             $params,
             '',
             'id, restoreid',
         );
         foreach ($operations as $operation) {
-            $DB->delete_records('local_cqbc_mapping', ['restoreid' => $operation->restoreid]);
-            $DB->delete_records('local_cqbc_operation', ['id' => $operation->id]);
+            $DB->delete_records('local_courseqbankcopy_map', ['restoreid' => $operation->restoreid]);
+            $DB->delete_records('local_courseqbankcopy_ops', ['id' => $operation->id]);
         }
     }
 }

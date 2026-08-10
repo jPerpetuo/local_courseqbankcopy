@@ -80,7 +80,7 @@ Enquanto o restore processa esses marcadores, o plugin registra:
 - categoria de origem -> categoria copiada;
 - entrada do banco de origem -> nova entrada do banco.
 
-Esses dados ficam temporariamente nas tabelas local_cqbc_operation e local_cqbc_mapping.
+Esses dados ficam temporariamente nas tabelas local_courseqbankcopy_ops e local_courseqbankcopy_map.
 
 4.4 Reconciliação depois do restore
 
