@@ -17,7 +17,7 @@ Feature: Import a course with an independent question bank
     And the following "questions" exist:
       | questioncategory     | qtype     | name            | template |
       | Source question bank | truefalse | Question in quiz | true     |
-      | Source question bank | truefalse | Unused question  | false    |
+      | Source question bank | truefalse | Unused question  | true     |
     And the following "activities" exist:
       | activity | name        | course | idnumber   |
       | quiz     | Source quiz | CQBC1  | sourcequiz |
