@@ -1,0 +1,110 @@
+<?php
+// This file is part of Moodle - https://moodle.org/.
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+
+/**
+ * Tests for the question reference reconciliation service.
+ *
+ * @package    local_courseqbankcopy
+ * @copyright  2026 jPerpetuo <joao.ariel@crearenet.com.br>
+ * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+namespace local_courseqbankcopy;
+
+use advanced_testcase;
+use context_course;
+use context_module;
+use local_courseqbankcopy\local\operation_repository;
+use local_courseqbankcopy\local\reference_reconciler;
+use PHPUnit\Framework\Attributes\CoversClass;
+
+/**
+ * Tests the question reference reconciliation service.
+ */
+#[CoversClass(reference_reconciler::class)]
+final class reference_reconciler_test extends advanced_testcase {
+    /**
+     * Fixed references are moved from the source entry to its destination copy.
+     */
+    public function test_reconcile_repoints_fixed_question_reference(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $generator = $this->getDataGenerator();
+        $sourcecourse = $generator->create_course();
+        $targetcourse = $generator->create_course();
+        $targetquiz = $generator->create_module('quiz', ['course' => $targetcourse->id]);
+
+        /** @var \core_question_generator $questiongenerator */
+        $questiongenerator = $generator->get_plugin_generator('core_question');
+        $sourcecategory = $questiongenerator->create_question_category([
+            'contextid' => context_course::instance($sourcecourse->id)->id,
+        ]);
+        $targetcategory = $questiongenerator->create_question_category([
+            'contextid' => context_course::instance($targetcourse->id)->id,
+        ]);
+        $sourcequestion = $questiongenerator->create_question('truefalse', null, [
+            'category' => $sourcecategory->id,
+        ]);
+        $targetquestion = $questiongenerator->create_question('truefalse', null, [
+            'category' => $targetcategory->id,
+        ]);
+
+        $restoreid = str_repeat('a', 32);
+        operation_repository::create(
+            $restoreid,
+            $sourcecourse->id,
+            $targetcourse->id,
+            str_repeat('b', 32),
+        );
+        operation_repository::upsert_mapping(
+            $restoreid,
+            operation_repository::TYPE_MODULE,
+            123,
+            $targetquiz->cmid,
+        );
+        operation_repository::upsert_mapping(
+            $restoreid,
+            operation_repository::TYPE_QBE,
+            $sourcequestion->questionbankentryid,
+            $targetquestion->questionbankentryid,
+        );
+
+        $quizcontext = context_module::instance($targetquiz->cmid);
+        $referenceid = $DB->insert_record('question_references', (object) [
+            'usingcontextid' => $quizcontext->id,
+            'component' => 'mod_quiz',
+            'questionarea' => 'slot',
+            'itemid' => 1,
+            'questionbankentryid' => $sourcequestion->questionbankentryid,
+            'version' => null,
+        ]);
+
+        $result = (new reference_reconciler())->reconcile($restoreid);
+        $reference = $DB->get_record('question_references', ['id' => $referenceid], '*', MUST_EXIST);
+        $operation = operation_repository::get($restoreid);
+
+        $this->assertSame(['fixed' => 1, 'random' => 0], $result);
+        $this->assertEquals($targetquestion->questionbankentryid, $reference->questionbankentryid);
+        $this->assertFalse($DB->record_exists('question_references', [
+            'usingcontextid' => $quizcontext->id,
+            'questionbankentryid' => $sourcequestion->questionbankentryid,
+        ]));
+        $this->assertNotNull($operation);
+        $this->assertSame(operation_repository::STATUS_COMPLETE, $operation->status);
+    }
+}
