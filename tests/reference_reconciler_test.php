@@ -184,4 +184,72 @@ final class reference_reconciler_test extends advanced_testcase {
         $this->assertNotNull($operation);
         $this->assertSame(operation_repository::STATUS_COMPLETE, $operation->status);
     }
+
+    /**
+     * Reconciliation fails when an imported activity still uses a source question-bank entry.
+     */
+    public function test_reconcile_rejects_remaining_source_reference(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $generator = $this->getDataGenerator();
+        $sourcecourse = $generator->create_course();
+        $targetcourse = $generator->create_course();
+        $targetquiz = $generator->create_module('quiz', ['course' => $targetcourse->id]);
+
+        /** @var \core_question_generator $questiongenerator */
+        $questiongenerator = $generator->get_plugin_generator('core_question');
+        $sourcecategory = $questiongenerator->create_question_category([
+            'contextid' => context_course::instance($sourcecourse->id)->id,
+        ]);
+        $sourcequestion = $questiongenerator->create_question('truefalse', null, [
+            'category' => $sourcecategory->id,
+        ]);
+
+        $restoreid = str_repeat('e', 32);
+        operation_repository::create(
+            $restoreid,
+            $sourcecourse->id,
+            $targetcourse->id,
+            str_repeat('f', 32),
+        );
+        operation_repository::upsert_mapping(
+            $restoreid,
+            operation_repository::TYPE_MODULE,
+            456,
+            $targetquiz->cmid,
+        );
+        operation_repository::upsert_mapping(
+            $restoreid,
+            operation_repository::TYPE_QBE,
+            $sourcequestion->questionbankentryid,
+            $sourcequestion->questionbankentryid,
+        );
+
+        $quizcontext = context_module::instance($targetquiz->cmid);
+        $referenceid = $DB->insert_record('question_references', (object) [
+            'usingcontextid' => $quizcontext->id,
+            'component' => 'mod_quiz',
+            'questionarea' => 'slot',
+            'itemid' => 2,
+            'questionbankentryid' => $sourcequestion->questionbankentryid,
+            'version' => null,
+        ]);
+
+        try {
+            (new reference_reconciler())->reconcile($restoreid);
+            $this->fail('The remaining source reference should have failed the independence validation.');
+        } catch (\moodle_exception $exception) {
+            $this->assertSame('independencevalidationfailed', $exception->errorcode);
+        }
+
+        $reference = $DB->get_record('question_references', ['id' => $referenceid], '*', MUST_EXIST);
+        $operation = operation_repository::get($restoreid);
+
+        $this->assertEquals($sourcequestion->questionbankentryid, $reference->questionbankentryid);
+        $this->assertNotNull($operation);
+        $this->assertNotSame(operation_repository::STATUS_COMPLETE, $operation->status);
+    }
 }
