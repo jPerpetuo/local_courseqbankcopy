@@ -27,6 +27,11 @@ O plugin usa pontos de extensão do próprio Moodle:
 
 Nenhum arquivo de `public/backup/` deve ser alterado.
 
+A inicialização antecipada da opção na tela de importação é uma exceção
+deliberada ao carregamento JavaScript modular padrão do Moodle. A justificativa
+e os critérios para reavaliá-la estão em
+`docs/decisao-frontend-carregamento-antecipado.md`.
+
 ## Compatibilidade declarada
 
 - Moodle 5.1.x

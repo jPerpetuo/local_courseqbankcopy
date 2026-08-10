@@ -46,7 +46,9 @@ Importação nativa
 
 4.1 Interface
 
-Um hook de saída carrega um módulo JavaScript AMD somente em /backup/import.php. Esse módulo adiciona a opção de cópia à interface nativa e envia o modo escolhido em todas as etapas da importação.
+Um hook de saída carrega um pequeno script JavaScript antecipado somente em /backup/import.php. Esse script adiciona a opção de cópia à interface nativa e envia o modo escolhido em todas as etapas da importação.
+
+O carregamento antecipado é uma exceção deliberada ao padrão modular do Moodle. No Moodle 5.1.1, módulos escritos em ESM dentro de amd/src são compilados para AMD e inicializados por js_call_amd no rodapé. Essa inicialização ocorre tarde demais para evitar que a opção apareça depois do restante do formulário. A decisão está detalhada em docs/decisao-frontend-carregamento-antecipado.md e deve ser reavaliada quando a compatibilidade com o Moodle 5.1 deixar de ser necessária ou quando o núcleo oferecer uma API pública para iniciar módulos no cabeçalho.
 
 Para usuários sem a capability local/courseqbankcopy:choosereusemode, a cópia permanece marcada e bloqueada. Para usuários autorizados, a escolha de reutilização depende também da configuração administrativa do plugin.
 
