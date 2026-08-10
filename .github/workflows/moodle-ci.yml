@@ -56,6 +56,7 @@ jobs:
             dbimage: mysql:8.4
             dbuser: root
             dbport: 3306
+            behat: true
           - name: Moodle 5.1 atual / PHP 8.2 / PostgreSQL 15
             php: '8.2'
             moodle: MOODLE_501_STABLE
@@ -63,6 +64,7 @@ jobs:
             dbimage: postgres:15
             dbuser: postgres
             dbport: 5432
+            behat: false
           - name: Moodle 5.2.1 / PHP 8.4 / MySQL 8.4
             php: '8.4'
             moodle: v5.2.1
@@ -70,6 +72,7 @@ jobs:
             dbimage: mysql:8.4
             dbuser: root
             dbport: 3306
+            behat: true
           - name: Moodle 5.2 atual / PHP 8.3 / PostgreSQL 16
             php: '8.3'
             moodle: MOODLE_502_STABLE
@@ -77,6 +80,7 @@ jobs:
             dbimage: postgres:16
             dbuser: postgres
             dbport: 5432
+            behat: false
 
     steps:
       - name: Check out repository code
@@ -137,6 +141,10 @@ jobs:
       - name: PHPUnit tests
         if: ${{ !cancelled() }}
         run: moodle-plugin-ci phpunit --fail-on-warning
+
+      - name: Behat functional test
+        if: ${{ !cancelled() && matrix.behat }}
+        run: moodle-plugin-ci behat --profile chrome --auto-rerun 0 --dump
 
       - name: Mark cancelled jobs as failed
         if: ${{ cancelled() }}

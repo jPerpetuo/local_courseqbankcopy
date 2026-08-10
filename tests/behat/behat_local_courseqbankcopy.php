@@ -1,0 +1,150 @@
+<?php
+// This file is part of Moodle - https://moodle.org/.
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
+
+use Behat\Mink\Exception\ExpectationException;
+use local_courseqbankcopy\local\operation_repository;
+
+require_once(__DIR__ . '/../../../../lib/behat/behat_base.php');
+
+/**
+ * Behat steps for independent question-bank imports.
+ *
+ * @package    local_courseqbankcopy
+ * @category   test
+ * @copyright  2026 jPerpetuo <joao.ariel@crearenet.com.br>
+ * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+final class behat_local_courseqbankcopy extends behat_base {
+    /**
+     * Confirms that an imported quiz and the complete bank are independent from the source course.
+     *
+     * @Then /^course "([^"]*)" has an independent bank copied from "([^"]*)" for quiz "([^"]*)"$/
+     * @param string $targetshortname Target course short name.
+     * @param string $sourceshortname Source course short name.
+     * @param string $quizname Imported quiz name.
+     */
+    public function course_should_have_independent_question_bank(
+        string $targetshortname,
+        string $sourceshortname,
+        string $quizname
+    ): void {
+        global $DB;
+
+        $sourcecourse = $DB->get_record('course', ['shortname' => $sourceshortname], '*', MUST_EXIST);
+        $targetcourse = $DB->get_record('course', ['shortname' => $targetshortname], '*', MUST_EXIST);
+        $sourceentries = $this->get_course_question_bank_entries($sourcecourse);
+        $targetentries = $this->get_course_question_bank_entries($targetcourse);
+
+        if (!$sourceentries || count($sourceentries) !== count($targetentries)) {
+            throw new ExpectationException(
+                'The target course does not contain a complete copy of the source question bank.',
+                $this->getSession(),
+            );
+        }
+        if (array_intersect($sourceentries, $targetentries)) {
+            throw new ExpectationException(
+                'The source and target courses still share question-bank entry IDs.',
+                $this->getSession(),
+            );
+        }
+
+        $sourcequizentries = $this->get_quiz_question_bank_entries($sourcecourse, $quizname);
+        $targetquizentries = $this->get_quiz_question_bank_entries($targetcourse, $quizname);
+        if (!$sourcequizentries || !$targetquizentries) {
+            throw new ExpectationException(
+                'The source or imported quiz has no fixed question references.',
+                $this->getSession(),
+            );
+        }
+        if (array_diff($targetquizentries, $targetentries) || array_intersect($targetquizentries, $sourceentries)) {
+            throw new ExpectationException(
+                'The imported quiz still uses a question-bank entry outside the target course.',
+                $this->getSession(),
+            );
+        }
+
+        $operations = $DB->get_records(
+            'local_courseqbankcopy_ops',
+            [
+                'sourcecourseid' => $sourcecourse->id,
+                'targetcourseid' => $targetcourse->id,
+            ],
+            'timemodified DESC',
+            '*',
+            0,
+            1,
+        );
+        $operation = $operations ? reset($operations) : null;
+        if (!$operation || $operation->status !== operation_repository::STATUS_COMPLETE) {
+            throw new ExpectationException(
+                'The independent question-bank copy operation did not finish successfully.',
+                $this->getSession(),
+            );
+        }
+    }
+
+    /**
+     * Returns all question-bank entry IDs owned by a course context hierarchy.
+     *
+     * @param stdClass $course Course record.
+     * @return int[]
+     */
+    private function get_course_question_bank_entries(stdClass $course): array {
+        global $DB;
+
+        $coursecontext = context_course::instance($course->id);
+        $pathlike = $DB->sql_like('ctx.path', ':contextpath');
+        $sql = "SELECT qbe.id
+                  FROM {question_bank_entries} qbe
+                  JOIN {question_categories} qc ON qc.id = qbe.questioncategoryid
+                  JOIN {context} ctx ON ctx.id = qc.contextid
+                 WHERE {$pathlike}";
+        $entries = $DB->get_fieldset_sql($sql, [
+            'contextpath' => $coursecontext->path . '/%',
+        ]);
+
+        return array_map('intval', $entries);
+    }
+
+    /**
+     * Returns the fixed question-bank entry IDs used by a quiz.
+     *
+     * @param stdClass $course Course record.
+     * @param string $quizname Quiz name.
+     * @return int[]
+     */
+    private function get_quiz_question_bank_entries(stdClass $course, string $quizname): array {
+        global $DB;
+
+        $quiz = $DB->get_record('quiz', [
+            'course' => $course->id,
+            'name' => $quizname,
+        ], '*', MUST_EXIST);
+        $coursemodule = get_coursemodule_from_instance('quiz', $quiz->id, $course->id, false, MUST_EXIST);
+        $quizcontext = context_module::instance($coursemodule->id);
+        $entries = $DB->get_fieldset_select(
+            'question_references',
+            'questionbankentryid',
+            'usingcontextid = :contextid AND component = :component',
+            [
+                'contextid' => $quizcontext->id,
+                'component' => 'mod_quiz',
+            ],
+        );
+
+        return array_map('intval', $entries);
+    }
+}
