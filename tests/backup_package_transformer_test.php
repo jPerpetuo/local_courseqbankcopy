@@ -26,12 +26,13 @@ namespace local_courseqbankcopy;
 use advanced_testcase;
 use local_courseqbankcopy\local\backup_package_transformer;
 use local_courseqbankcopy\local\operation_repository;
+use PHPUnit\Framework\Attributes\CoversClass;
 
 /**
  * Tests the temporary backup package transformer.
  *
- * @covers \local_courseqbankcopy\local\backup_package_transformer
  */
+#[CoversClass(backup_package_transformer::class)]
 final class backup_package_transformer_test extends advanced_testcase {
     /**
      * Category markers are deterministic inside one operation and change between operations.
