@@ -107,4 +107,81 @@ final class reference_reconciler_test extends advanced_testcase {
         $this->assertNotNull($operation);
         $this->assertSame(operation_repository::STATUS_COMPLETE, $operation->status);
     }
+
+    /**
+     * Random references are moved to the destination category and question-bank context.
+     */
+    public function test_reconcile_repoints_random_question_reference(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $generator = $this->getDataGenerator();
+        $sourcecourse = $generator->create_course();
+        $targetcourse = $generator->create_course();
+        $targetquiz = $generator->create_module('quiz', ['course' => $targetcourse->id]);
+
+        /** @var \core_question_generator $questiongenerator */
+        $questiongenerator = $generator->get_plugin_generator('core_question');
+        $sourcecategory = $questiongenerator->create_question_category([
+            'contextid' => context_course::instance($sourcecourse->id)->id,
+        ]);
+        $targetcategory = $questiongenerator->create_question_category([
+            'contextid' => context_course::instance($targetcourse->id)->id,
+        ]);
+
+        $restoreid = str_repeat('c', 32);
+        operation_repository::create(
+            $restoreid,
+            $sourcecourse->id,
+            $targetcourse->id,
+            str_repeat('d', 32),
+        );
+        operation_repository::upsert_mapping(
+            $restoreid,
+            operation_repository::TYPE_MODULE,
+            321,
+            $targetquiz->cmid,
+        );
+        operation_repository::upsert_mapping(
+            $restoreid,
+            operation_repository::TYPE_CATEGORY,
+            $sourcecategory->id,
+            $targetcategory->id,
+            $sourcecategory->contextid,
+            $targetcategory->contextid,
+        );
+
+        $quizcontext = context_module::instance($targetquiz->cmid);
+        $referenceid = $DB->insert_record('question_set_references', (object) [
+            'usingcontextid' => $quizcontext->id,
+            'component' => 'mod_quiz',
+            'questionarea' => 'slot',
+            'itemid' => 1,
+            'questionscontextid' => $sourcecategory->contextid,
+            'filtercondition' => json_encode([
+                'filter' => [
+                    'category' => ['values' => [$sourcecategory->id]],
+                ],
+                'cat' => $sourcecategory->id . ',' . $sourcecategory->contextid,
+            ], JSON_THROW_ON_ERROR),
+        ]);
+
+        $result = (new reference_reconciler())->reconcile($restoreid);
+        $reference = $DB->get_record('question_set_references', ['id' => $referenceid], '*', MUST_EXIST);
+        $condition = json_decode($reference->filtercondition, true, 512, JSON_THROW_ON_ERROR);
+        $operation = operation_repository::get($restoreid);
+
+        $this->assertSame(['fixed' => 0, 'random' => 1], $result);
+        $this->assertEquals($targetcategory->contextid, $reference->questionscontextid);
+        $this->assertEquals($targetcategory->id, $condition['filter']['category']['values'][0]);
+        $this->assertSame(
+            $targetcategory->id . ',' . $targetcategory->contextid,
+            $condition['cat'],
+        );
+        $this->assertNotEquals($sourcecategory->contextid, $reference->questionscontextid);
+        $this->assertNotNull($operation);
+        $this->assertSame(operation_repository::STATUS_COMPLETE, $operation->status);
+    }
 }
