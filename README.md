@@ -50,3 +50,8 @@ php admin/cli/purge_caches.php
 ```
 
 Se o patch experimental anterior estiver aplicado, restaure os arquivos oficiais do núcleo antes dos testes desta versão.
+
+## Licença
+
+Este plugin é distribuído sob a GNU General Public License v3 ou posterior.
+Consulte o arquivo `LICENSE` para obter o texto completo da licença.

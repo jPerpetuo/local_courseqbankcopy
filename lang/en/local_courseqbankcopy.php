@@ -1,6 +1,26 @@
 <?php
 // This file is part of Moodle - https://moodle.org/.
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
+/**
+ * English language strings for the plugin.
+ *
+ * @package    local_courseqbankcopy
+ * @copyright  2026 jPerpetuo <joao.ariel@crearenet.com.br>
+ * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 $string['pluginname'] = 'Independent question bank copy';
 $string['copyquestions'] = 'Copy question banks to this course';
 $string['copyquestions_desc'] = 'Creates independent copies of question banks from the source course during course import.';
@@ -12,6 +32,7 @@ $string['allowreuseselection'] = 'Allow authorised users to choose reuse mode';
 $string['allowreuseselection_desc'] = 'Users with the local/courseqbankcopy:choosereusemode capability may select reuse mode during import.';
 $string['courseqbankcopy:choosereusemode'] = 'Choose question bank reuse mode during course import';
 $string['privacy:metadata'] = 'The Independent question bank copy plugin does not store personal data.';
+$string['targetcourseidentificationfailed'] = 'local_courseqbankcopy: The target course could not be identified safely.';
 $string['cannottransformquestions'] = 'The independent question-bank copy could not be prepared.';
 $string['copyinterceptionfailed'] = 'The import was stopped because the plugin could not prepare an independent question-bank copy.';
 $string['copyreconciliationfailed'] = 'The import finished, but validation of the new question-bank references failed. Ask an administrator to review it before using the imported quiz.';

@@ -1,22 +1,54 @@
 <?php
 // This file is part of Moodle - https://moodle.org/.
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
+/**
+ * Persistence service for copy operations and mappings.
+ *
+ * @package    local_courseqbankcopy
+ * @copyright  2026 jPerpetuo <joao.ariel@crearenet.com.br>
+ * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 namespace local_courseqbankcopy\local;
-
-defined('MOODLE_INTERNAL') || die();
 
 /**
  * Persists an import operation and the old-to-new ID mappings needed after restore.
  */
 final class operation_repository {
+    /** The backup package is prepared and ready for restore. */
     public const STATUS_PREPARED = 'prepared';
+
+    /** The native Moodle restore is currently running. */
     public const STATUS_RESTORING = 'restoring';
+
+    /** Question references are being redirected to the copied bank. */
     public const STATUS_RECONCILING = 'reconciling';
+
+    /** The independent-copy operation completed successfully. */
     public const STATUS_COMPLETE = 'complete';
+
+    /** The independent-copy operation stopped with an error. */
     public const STATUS_FAILED = 'failed';
 
+    /** Mapping type for question categories. */
     public const TYPE_CATEGORY = 'category';
+
+    /** Mapping type for question bank entries. */
     public const TYPE_QBE = 'qbankentry';
+
+    /** Mapping type for course modules. */
     public const TYPE_MODULE = 'module';
 
     /**

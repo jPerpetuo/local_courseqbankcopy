@@ -1,12 +1,27 @@
 // This file is part of Moodle - https://moodle.org/.
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <https://www.gnu.org/licenses/>.
 
 /**
- * Insere antecipadamente a opção de cópia no formulário nativo de importação.
+ * Adds the copy option early to the native course import form.
  *
- * O arquivo é carregado no início do body para observar a construção do formulário
- * e evitar que o campo apareça somente depois da renderização completa da página.
+ * This file is loaded early in the body to observe the native form construction
+ * and prevent the field from appearing only after the full page has rendered.
  *
- * @module local_courseqbankcopy/import_options_early
+ * @module     local_courseqbankcopy/import_options_early
+ * @copyright  2026 jPerpetuo <joao.ariel@crearenet.com.br>
+ * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
 (function() {
@@ -28,7 +43,7 @@
     }
 
     /**
-     * Retorna a chave de armazenamento do par de cursos da importação atual.
+     * Returns the storage key for the current source and target course pair.
      *
      * @returns {string}
      */
@@ -42,7 +57,7 @@
     };
 
     /**
-     * Garante que todos os módulos de banco de questões sejam importados.
+     * Ensures that all question bank modules are included in the import.
      */
     const includeQuestionBanks = () => {
         document.querySelectorAll('input[type="checkbox"][name^="qbank_"][name$="_included"]')
@@ -54,10 +69,10 @@
     };
 
     /**
-     * Mantém o modo selecionado nos formulários nativos de importação.
+     * Keeps the selected mode in the native import forms.
      *
-     * @param {HTMLFormElement[]} forms Formulários encontrados.
-     * @param {string} mode Modo selecionado.
+     * @param {HTMLFormElement[]} forms Import forms found on the page.
+     * @param {string} mode Selected import mode.
      */
     const setFormMode = (forms, mode) => {
         forms.forEach((form) => {
@@ -73,11 +88,11 @@
     };
 
     /**
-     * Cria o campo visual usando as classes nativas do Bootstrap/Moodle.
+     * Creates the visual field using native Bootstrap and Moodle classes.
      *
-     * @param {HTMLFormElement} form Formulário da etapa de configurações iniciais.
-     * @param {string} storageKey Chave usada para manter a escolha entre etapas.
-     * @param {string} initialMode Modo inicial.
+     * @param {HTMLFormElement} form Form for the initial settings step.
+     * @param {string} storageKey Key used to retain the selection between steps.
+     * @param {string} initialMode Initial import mode.
      */
     const addOption = (form, storageKey, initialMode) => {
         if (document.getElementById('local-courseqbankcopy-option')) {
@@ -133,7 +148,7 @@
     };
 
     /**
-     * Integra o modo de cópia assim que os elementos necessários aparecem no DOM.
+     * Integrates copy mode as soon as the required elements appear in the DOM.
      */
     const render = () => {
         const importForms = Array.from(document.querySelectorAll('form'))
