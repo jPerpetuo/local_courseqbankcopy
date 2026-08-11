@@ -239,6 +239,74 @@ final class reference_reconciler_test extends advanced_testcase {
     }
 
     /**
+     * A technical top category is mapped from its copied child when Moodle replaces the top stamp.
+     */
+    public function test_reconcile_maps_pending_parent_from_copied_child(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $generator = $this->getDataGenerator();
+        $sourcecourse = $generator->create_course();
+        $targetcourse = $generator->create_course();
+
+        /** @var \core_question_generator $questiongenerator */
+        $questiongenerator = $generator->get_plugin_generator('core_question');
+        $sourcecategory = $questiongenerator->create_question_category([
+            'contextid' => context_course::instance($sourcecourse->id)->id,
+            'name' => 'Copied child',
+        ]);
+        $targetcategory = $questiongenerator->create_question_category([
+            'contextid' => context_course::instance($targetcourse->id)->id,
+            'name' => 'Copied child',
+        ]);
+        $sourcetopcategory = $DB->get_record(
+            'question_categories',
+            ['id' => $sourcecategory->parent],
+            '*',
+            MUST_EXIST,
+        );
+        $targettopcategory = $DB->get_record(
+            'question_categories',
+            ['id' => $targetcategory->parent],
+            '*',
+            MUST_EXIST,
+        );
+
+        $restoreid = str_repeat('g', 32);
+        operation_repository::create(
+            $restoreid,
+            $sourcecourse->id,
+            $targetcourse->id,
+            str_repeat('h', 32),
+        );
+        operation_repository::upsert_mapping(
+            $restoreid,
+            operation_repository::TYPE_CATEGORY,
+            $sourcetopcategory->id,
+        );
+        operation_repository::upsert_mapping(
+            $restoreid,
+            operation_repository::TYPE_CATEGORY,
+            $sourcecategory->id,
+            $targetcategory->id,
+            $sourcecategory->contextid,
+            $targetcategory->contextid,
+        );
+
+        (new reference_reconciler())->reconcile($restoreid);
+
+        $topmapping = $DB->get_record('local_courseqbankcopy_map', [
+            'restoreid' => $restoreid,
+            'itemtype' => operation_repository::TYPE_CATEGORY,
+            'oldid' => $sourcetopcategory->id,
+        ], '*', MUST_EXIST);
+        $this->assertEquals($targettopcategory->id, $topmapping->newid);
+        $this->assertEquals($targettopcategory->contextid, $topmapping->newparentid);
+    }
+
+    /**
      * Reconciliation fails when an imported activity still uses a source question-bank entry.
      */
     public function test_reconcile_rejects_remaining_source_reference(): void {

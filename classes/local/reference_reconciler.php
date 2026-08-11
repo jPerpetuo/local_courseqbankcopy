@@ -46,6 +46,7 @@ final class reference_reconciler {
         $this->resolve_core_module_mappings($operation);
         $this->resolve_core_category_mappings($operation);
         $this->resolve_pending_categories($operation);
+        $this->resolve_parent_categories_from_children($operation);
         $this->resolve_categories_by_structure($operation);
 
         $modulemappings = operation_repository::get_mappings($restoreid, operation_repository::TYPE_MODULE);
@@ -310,6 +311,95 @@ final class reference_reconciler {
                 );
             }
         }
+    }
+
+    /**
+     * Resolves pending parents from children already copied by Moodle.
+     *
+     * Moodle creates a fresh technical top category for each restored bank and
+     * replaces its backup stamp. A copied child retains its new parent ID, which
+     * provides an authoritative mapping without relying on names or stamps.
+     *
+     * @param \stdClass $operation Operation record.
+     */
+    private function resolve_parent_categories_from_children(\stdClass $operation): void {
+        global $DB;
+
+        $targetcoursecontext = \context_course::instance($operation->targetcourseid);
+        do {
+            $changed = false;
+            $mappings = operation_repository::get_mappings(
+                $operation->restoreid,
+                operation_repository::TYPE_CATEGORY,
+            );
+            $categorymap = [];
+            foreach ($mappings as $mapping) {
+                $categorymap[(int) $mapping->oldid] = $mapping;
+            }
+
+            foreach ($mappings as $mapping) {
+                if ($mapping->newid) {
+                    continue;
+                }
+
+                $sourcecategory = $DB->get_record(
+                    'question_categories',
+                    ['id' => $mapping->oldid],
+                    'id, contextid',
+                );
+                if (!$sourcecategory) {
+                    continue;
+                }
+
+                $targetparents = [];
+                $sourcechildren = $DB->get_records('question_categories', [
+                    'parent' => $sourcecategory->id,
+                    'contextid' => $sourcecategory->contextid,
+                ]);
+                foreach ($sourcechildren as $sourcechild) {
+                    $childmapping = $categorymap[(int) $sourcechild->id] ?? null;
+                    if (!$childmapping || !$childmapping->newid) {
+                        continue;
+                    }
+
+                    $targetchild = $DB->get_record(
+                        'question_categories',
+                        ['id' => $childmapping->newid],
+                        'id, parent, contextid',
+                    );
+                    if (!$targetchild || !$targetchild->parent) {
+                        continue;
+                    }
+
+                    $targetparent = $DB->get_record('question_categories', [
+                        'id' => $targetchild->parent,
+                        'contextid' => $targetchild->contextid,
+                    ]);
+                    $targetcontext = $targetparent
+                        ? \context::instance_by_id((int) $targetparent->contextid, IGNORE_MISSING)
+                        : null;
+                    if (!$targetcontext || !$targetcoursecontext->is_parent_of($targetcontext, true)) {
+                        continue;
+                    }
+                    $targetparents[(int) $targetparent->id] = $targetparent;
+                }
+
+                if (count($targetparents) !== 1) {
+                    continue;
+                }
+                $targetparent = reset($targetparents);
+                operation_repository::upsert_mapping(
+                    $operation->restoreid,
+                    operation_repository::TYPE_CATEGORY,
+                    (int) $mapping->oldid,
+                    (int) $targetparent->id,
+                    (int) $sourcecategory->contextid,
+                    (int) $targetparent->contextid,
+                    $mapping->marker,
+                );
+                $changed = true;
+            }
+        } while ($changed);
     }
 
     /**
@@ -615,23 +705,6 @@ final class reference_reconciler {
         $coursecontext = \context_course::instance($operation->targetcourseid);
         foreach ($categorymappings as $mapping) {
             if (!$mapping->newid) {
-                $like = $DB->sql_like('ctx.path', ':contextpath');
-                $targetcategories = $DB->get_records_sql(
-                    "SELECT qc.id, qc.name, qc.parent, qc.contextid, qc.stamp, ctx.contextlevel, ctx.instanceid
-                       FROM {question_categories} qc
-                       JOIN {context} ctx ON ctx.id = qc.contextid
-                      WHERE {$like}",
-                    ['contextpath' => $coursecontext->path . '/%'],
-                );
-                debugging(json_encode([
-                    'missingmapping' => $mapping,
-                    'sourcecategory' => $DB->get_record('question_categories', ['id' => $mapping->oldid]),
-                    'modulemappings' => array_values(operation_repository::get_mappings(
-                        $operation->restoreid,
-                        operation_repository::TYPE_MODULE,
-                    )),
-                    'targetcategories' => array_values($targetcategories),
-                ], JSON_UNESCAPED_SLASHES), DEBUG_DEVELOPER);
                 throw new \moodle_exception('categorymappingmissing', 'local_courseqbankcopy', '', $mapping->oldid);
             }
             $context = \context::instance_by_id((int) $mapping->newparentid, IGNORE_MISSING);
