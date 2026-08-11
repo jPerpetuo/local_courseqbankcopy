@@ -121,7 +121,14 @@ final class reference_reconciler_test extends advanced_testcase {
         $generator = $this->getDataGenerator();
         $sourcecourse = $generator->create_course();
         $targetcourse = $generator->create_course();
-        $targetquiz = $generator->create_module('quiz', ['course' => $targetcourse->id]);
+        $sourcequiz = $generator->create_module('quiz', [
+            'course' => $sourcecourse->id,
+            'name' => 'Random quiz',
+        ]);
+        $targetquiz = $generator->create_module('quiz', [
+            'course' => $targetcourse->id,
+            'name' => 'Random quiz',
+        ]);
 
         /** @var \core_question_generator $questiongenerator */
         $questiongenerator = $generator->get_plugin_generator('core_question');
@@ -172,12 +179,6 @@ final class reference_reconciler_test extends advanced_testcase {
         );
         operation_repository::upsert_mapping(
             $restoreid,
-            operation_repository::TYPE_MODULE,
-            321,
-            $targetquiz->cmid,
-        );
-        operation_repository::upsert_mapping(
-            $restoreid,
             operation_repository::TYPE_CATEGORY,
             $sourcetopcategory->id,
         );
@@ -197,6 +198,18 @@ final class reference_reconciler_test extends advanced_testcase {
             0,
             0,
             $modulemarker,
+        );
+
+        $quizmarker = backup_package_transformer::module_marker(str_repeat('d', 32), $sourcequiz->cmid);
+        $DB->set_field('quiz', 'name', $quizmarker, ['id' => $targetquiz->id]);
+        operation_repository::upsert_mapping(
+            $restoreid,
+            operation_repository::TYPE_MODULE,
+            $sourcequiz->cmid,
+            0,
+            0,
+            0,
+            $quizmarker,
         );
 
         $quizcontext = context_module::instance($targetquiz->cmid);
@@ -234,6 +247,7 @@ final class reference_reconciler_test extends advanced_testcase {
         ], '*', MUST_EXIST);
         $this->assertEquals($targettopcategory->id, $topmapping->newid);
         $this->assertSame($sourceqbank->name, $DB->get_field('qbank', 'name', ['id' => $targetqbank->id]));
+        $this->assertSame($sourcequiz->name, $DB->get_field('quiz', 'name', ['id' => $targetquiz->id]));
         $this->assertNotNull($operation);
         $this->assertSame(operation_repository::STATUS_COMPLETE, $operation->status);
     }

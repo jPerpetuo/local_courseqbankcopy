@@ -70,7 +70,7 @@ final class reference_reconciler {
     }
 
     /**
-     * Resolves copied qbank modules by their temporary package marker.
+     * Resolves copied question banks and quizzes by their temporary package marker.
      *
      * The original activity name is restored immediately after the destination
      * course-module ID is persisted.
@@ -80,9 +80,19 @@ final class reference_reconciler {
     private function resolve_marked_module_mappings(\stdClass $operation): void {
         global $DB;
 
-        $qbankmoduleid = $DB->get_field('modules', 'id', ['name' => 'qbank']);
-        if (!$qbankmoduleid) {
+        $supportedmodules = $DB->get_records_list(
+            'modules',
+            'name',
+            ['qbank', 'quiz'],
+            '',
+            'id, name',
+        );
+        if (!$supportedmodules) {
             return;
+        }
+        $modulenames = [];
+        foreach ($supportedmodules as $module) {
+            $modulenames[(int) $module->id] = $module->name;
         }
 
         $renamed = false;
@@ -100,34 +110,34 @@ final class reference_reconciler {
                 [
                     'id' => $mapping->oldid,
                     'course' => $operation->sourcecourseid,
-                    'module' => $qbankmoduleid,
                 ],
-                'id, instance',
+                'id, module, instance',
             );
-            $sourceqbank = $sourcecm
-                ? $DB->get_record('qbank', ['id' => $sourcecm->instance], 'id, name')
+            $modulename = $sourcecm ? ($modulenames[(int) $sourcecm->module] ?? null) : null;
+            $sourceinstance = $modulename
+                ? $DB->get_record($modulename, ['id' => $sourcecm->instance], 'id, name')
                 : null;
-            $targetqbank = $DB->get_record(
-                'qbank',
+            $targetinstance = $modulename ? $DB->get_record(
+                $modulename,
                 [
                     'course' => $operation->targetcourseid,
                     'name' => $mapping->marker,
                 ],
                 'id, name',
-            );
-            if (!$sourceqbank || !$targetqbank) {
+            ) : null;
+            if (!$sourceinstance || !$targetinstance) {
                 continue;
             }
 
-            $DB->set_field('qbank', 'name', $sourceqbank->name, ['id' => $targetqbank->id]);
+            $DB->set_field($modulename, 'name', $sourceinstance->name, ['id' => $targetinstance->id]);
             $renamed = true;
 
             $targetcm = $DB->get_record(
                 'course_modules',
                 [
                     'course' => $operation->targetcourseid,
-                    'module' => $qbankmoduleid,
-                    'instance' => $targetqbank->id,
+                    'module' => $sourcecm->module,
+                    'instance' => $targetinstance->id,
                 ],
                 'id',
             );

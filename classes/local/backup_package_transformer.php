@@ -92,7 +92,7 @@ final class backup_package_transformer {
      * @return array{categories:int,questions:int}
      */
     public function transform(string $tempdir, string $restoreid, string $token): array {
-        $this->transform_question_bank_modules($tempdir, $restoreid, $token);
+        $this->transform_named_modules($tempdir, $restoreid, $token);
 
         $questionsfile = rtrim($tempdir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'questions.xml';
         if (!is_readable($questionsfile)) {
@@ -163,56 +163,58 @@ final class backup_package_transformer {
     }
 
     /**
-     * Gives each qbank module a temporary identity that survives the restore.
+     * Gives each supported named module a temporary identity that survives the restore.
+     *
+     * Question banks identify the destination contexts for copied categories.
+     * Quizzes identify the contexts whose fixed and random references may be
+     * repointed safely after the native restore finishes.
      *
      * @param string $tempdir Backup temporary directory.
      * @param string $restoreid Backup/restore ID.
      * @param string $token Operation token.
      */
-    private function transform_question_bank_modules(string $tempdir, string $restoreid, string $token): void {
+    private function transform_named_modules(string $tempdir, string $restoreid, string $token): void {
         $activitiesdir = rtrim($tempdir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'activities';
-        $directories = glob($activitiesdir . DIRECTORY_SEPARATOR . 'qbank_*', GLOB_ONLYDIR);
-        if (!$directories) {
-            return;
-        }
+        foreach (['qbank', 'quiz'] as $modulename) {
+            $directories = glob($activitiesdir . DIRECTORY_SEPARATOR . $modulename . '_*', GLOB_ONLYDIR);
+            foreach ($directories ?: [] as $directory) {
+                if (!preg_match('/^' . preg_quote($modulename, '/') . '_(\d+)$/', basename($directory), $matches)) {
+                    continue;
+                }
 
-        foreach ($directories as $directory) {
-            if (!preg_match('/^qbank_(\d+)$/', basename($directory), $matches)) {
-                continue;
+                $sourcecmid = (int) $matches[1];
+                $modulefile = $directory . DIRECTORY_SEPARATOR . $modulename . '.xml';
+                if (!is_readable($modulefile)) {
+                    throw new \moodle_exception('cannottransformquestions', 'local_courseqbankcopy');
+                }
+
+                $previous = libxml_use_internal_errors(true);
+                $xml = simplexml_load_file($modulefile);
+                libxml_clear_errors();
+                libxml_use_internal_errors($previous);
+                $namenodes = $xml ? $xml->xpath('/activity/' . $modulename . '/name') : false;
+                if (!$xml || !$namenodes || count($namenodes) !== 1) {
+                    throw new \moodle_exception('cannottransformquestions', 'local_courseqbankcopy');
+                }
+
+                $marker = self::module_marker($token, $sourcecmid);
+                $namenodes[0][0] = $marker;
+                $temporaryfile = $modulefile . '.courseqbankcopy-' . $token . '.tmp';
+                if ($xml->asXML($temporaryfile) === false || !rename($temporaryfile, $modulefile)) {
+                    @unlink($temporaryfile);
+                    throw new \moodle_exception('cannottransformquestions', 'local_courseqbankcopy');
+                }
+
+                operation_repository::upsert_mapping(
+                    $restoreid,
+                    operation_repository::TYPE_MODULE,
+                    $sourcecmid,
+                    0,
+                    0,
+                    0,
+                    $marker,
+                );
             }
-
-            $sourcecmid = (int) $matches[1];
-            $qbankfile = $directory . DIRECTORY_SEPARATOR . 'qbank.xml';
-            if (!is_readable($qbankfile)) {
-                throw new \moodle_exception('cannottransformquestions', 'local_courseqbankcopy');
-            }
-
-            $previous = libxml_use_internal_errors(true);
-            $xml = simplexml_load_file($qbankfile);
-            libxml_clear_errors();
-            libxml_use_internal_errors($previous);
-            $namenodes = $xml ? $xml->xpath('/activity/qbank/name') : false;
-            if (!$xml || !$namenodes || count($namenodes) !== 1) {
-                throw new \moodle_exception('cannottransformquestions', 'local_courseqbankcopy');
-            }
-
-            $marker = self::module_marker($token, $sourcecmid);
-            $namenodes[0][0] = $marker;
-            $temporaryfile = $qbankfile . '.courseqbankcopy-' . $token . '.tmp';
-            if ($xml->asXML($temporaryfile) === false || !rename($temporaryfile, $qbankfile)) {
-                @unlink($temporaryfile);
-                throw new \moodle_exception('cannottransformquestions', 'local_courseqbankcopy');
-            }
-
-            operation_repository::upsert_mapping(
-                $restoreid,
-                operation_repository::TYPE_MODULE,
-                $sourcecmid,
-                0,
-                0,
-                0,
-                $marker,
-            );
         }
     }
 

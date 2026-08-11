@@ -93,6 +93,47 @@ XML;
     }
 
     /**
+     * The transformer gives imported quizzes a temporary identity and persists it.
+     */
+    public function test_transform_marks_quiz_modules(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $source = $this->getDataGenerator()->create_course();
+        $target = $this->getDataGenerator()->create_course();
+        $restoreid = str_repeat('e', 32);
+        $token = str_repeat('f', 32);
+        operation_repository::create($restoreid, $source->id, $target->id, $token);
+
+        $tempdir = make_request_directory();
+        $activitydir = $tempdir . '/activities/quiz_789';
+        mkdir($tempdir . '/activities');
+        mkdir($activitydir);
+        $xml = <<<XML
+<?xml version="1.0" encoding="UTF-8"?>
+<activity id="100" moduleid="789" modulename="quiz">
+  <quiz id="88">
+    <name>Questionário original</name>
+  </quiz>
+</activity>
+XML;
+        file_put_contents($activitydir . '/quiz.xml', $xml);
+
+        $result = (new backup_package_transformer())->transform($tempdir, $restoreid, $token);
+        $transformed = simplexml_load_file($activitydir . '/quiz.xml');
+        $mapping = $DB->get_record('local_courseqbankcopy_map', [
+            'restoreid' => $restoreid,
+            'itemtype' => operation_repository::TYPE_MODULE,
+            'oldid' => 789,
+        ], '*', MUST_EXIST);
+
+        $this->assertSame(['categories' => 0, 'questions' => 0], $result);
+        $this->assertSame(backup_package_transformer::module_marker($token, 789), (string) $transformed->quiz->name);
+        $this->assertSame($mapping->marker, (string) $transformed->quiz->name);
+        $this->assertEquals(0, $mapping->newid);
+    }
+
+    /**
      * The transformer replaces category stamps and counts questions without loading the full XML.
      */
     public function test_transform_replaces_category_stamps(): void {
