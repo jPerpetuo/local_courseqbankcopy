@@ -188,8 +188,15 @@ final class behat_local_courseqbankcopy extends behat_base {
                     || !$targetcontext->is_parent_of($questionscontext, true)
                     || $sourcecontext->is_parent_of($questionscontext, true)
             ) {
+                $details = json_encode([
+                    'questionscontextid' => (int) $reference->questionscontextid,
+                    'questionscontextpath' => $questionscontext->path ?? null,
+                    'sourcecontextpath' => $sourcecontext->path,
+                    'targetcontextpath' => $targetcontext->path,
+                    'filtercondition' => $reference->filtercondition,
+                ], JSON_UNESCAPED_SLASHES);
                 throw new ExpectationException(
-                    'The imported random question still uses a category or context outside the target course.',
+                    'The imported random question still uses a context outside the target course: ' . $details,
                     $this->getSession(),
                 );
             }
@@ -206,8 +213,15 @@ final class behat_local_courseqbankcopy extends behat_base {
                         || !$targetcontext->is_parent_of($categorycontext, true)
                         || $sourcecontext->is_parent_of($categorycontext, true)
                 ) {
+                    $details = json_encode([
+                        'categoryid' => $categoryid,
+                        'categorycontextpath' => $categorycontext->path ?? null,
+                        'sourcecontextpath' => $sourcecontext->path,
+                        'targetcontextpath' => $targetcontext->path,
+                        'filtercondition' => $reference->filtercondition,
+                    ], JSON_UNESCAPED_SLASHES);
                     throw new ExpectationException(
-                        'The imported random question filter still contains a category outside the target course.',
+                        'The imported random question filter contains a category outside the target course: ' . $details,
                         $this->getSession(),
                     );
                 }
