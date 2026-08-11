@@ -615,6 +615,23 @@ final class reference_reconciler {
         $coursecontext = \context_course::instance($operation->targetcourseid);
         foreach ($categorymappings as $mapping) {
             if (!$mapping->newid) {
+                $like = $DB->sql_like('ctx.path', ':contextpath');
+                $targetcategories = $DB->get_records_sql(
+                    "SELECT qc.id, qc.name, qc.parent, qc.contextid, qc.stamp, ctx.contextlevel, ctx.instanceid
+                       FROM {question_categories} qc
+                       JOIN {context} ctx ON ctx.id = qc.contextid
+                      WHERE {$like}",
+                    ['contextpath' => $coursecontext->path . '/%'],
+                );
+                debugging(json_encode([
+                    'missingmapping' => $mapping,
+                    'sourcecategory' => $DB->get_record('question_categories', ['id' => $mapping->oldid]),
+                    'modulemappings' => array_values(operation_repository::get_mappings(
+                        $operation->restoreid,
+                        operation_repository::TYPE_MODULE,
+                    )),
+                    'targetcategories' => array_values($targetcategories),
+                ], JSON_UNESCAPED_SLASHES), DEBUG_DEVELOPER);
                 throw new \moodle_exception('categorymappingmissing', 'local_courseqbankcopy', '', $mapping->oldid);
             }
             $context = \context::instance_by_id((int) $mapping->newparentid, IGNORE_MISSING);
