@@ -77,21 +77,21 @@ final class reference_reconciler {
     private function resolve_core_category_mappings(\stdClass $operation): void {
         global $DB;
 
-        if (!$DB->get_manager()->table_exists('backup_ids_temp')) {
-            return;
-        }
-
         $targetcoursecontext = \context_course::instance($operation->targetcourseid);
         $mappings = operation_repository::get_mappings(
             $operation->restoreid,
             operation_repository::TYPE_CATEGORY,
         );
         foreach ($mappings as $mapping) {
-            $coremapping = $DB->get_record('backup_ids_temp', [
-                'backupid' => $operation->restoreid,
-                'itemname' => 'question_category',
-                'itemid' => $mapping->oldid,
-            ]);
+            try {
+                $coremapping = $DB->get_record('backup_ids_temp', [
+                    'backupid' => $operation->restoreid,
+                    'itemname' => 'question_category',
+                    'itemid' => $mapping->oldid,
+                ]);
+            } catch (\dml_exception) {
+                return;
+            }
             if (!$coremapping || !$coremapping->newitemid) {
                 continue;
             }
