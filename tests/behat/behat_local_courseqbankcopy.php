@@ -166,6 +166,22 @@ final class behat_local_courseqbankcopy extends behat_base {
         $targetcontext = context_course::instance($targetcourse->id);
         $sourcereferences = $this->get_quiz_question_set_references($sourcecourse, $quizname);
         $targetreferences = $this->get_quiz_question_set_references($targetcourse, $quizname);
+        $operations = $DB->get_records(
+            'local_courseqbankcopy_ops',
+            [
+                'sourcecourseid' => $sourcecourse->id,
+                'targetcourseid' => $targetcourse->id,
+            ],
+            'timemodified DESC',
+            '*',
+            0,
+            1,
+        );
+        $operation = $operations ? reset($operations) : null;
+        $categorymappings = $operation ? operation_repository::get_mappings(
+            $operation->restoreid,
+            operation_repository::TYPE_CATEGORY,
+        ) : [];
 
         if (!$sourcereferences || count($sourcereferences) !== count($targetreferences)) {
             throw new ExpectationException(
@@ -194,6 +210,7 @@ final class behat_local_courseqbankcopy extends behat_base {
                     'sourcecontextpath' => $sourcecontext->path,
                     'targetcontextpath' => $targetcontext->path,
                     'filtercondition' => $reference->filtercondition,
+                    'categorymappings' => array_values($categorymappings),
                 ], JSON_UNESCAPED_SLASHES);
                 throw new ExpectationException(
                     'The imported random question still uses a context outside the target course: ' . $details,
@@ -228,18 +245,6 @@ final class behat_local_courseqbankcopy extends behat_base {
             }
         }
 
-        $operations = $DB->get_records(
-            'local_courseqbankcopy_ops',
-            [
-                'sourcecourseid' => $sourcecourse->id,
-                'targetcourseid' => $targetcourse->id,
-            ],
-            'timemodified DESC',
-            '*',
-            0,
-            1,
-        );
-        $operation = $operations ? reset($operations) : null;
         if (!$operation || $operation->status !== operation_repository::STATUS_COMPLETE) {
             throw new ExpectationException(
                 'The random question-bank copy operation did not finish successfully.',
