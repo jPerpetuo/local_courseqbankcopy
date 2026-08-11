@@ -44,6 +44,7 @@ final class reference_reconciler {
         operation_repository::set_status($restoreid, operation_repository::STATUS_RECONCILING);
         $this->resolve_core_category_mappings($operation);
         $this->resolve_pending_categories($operation);
+        $this->resolve_categories_by_structure($operation);
 
         $modulemappings = operation_repository::get_mappings($restoreid, operation_repository::TYPE_MODULE);
         $qbemappings = operation_repository::get_mappings($restoreid, operation_repository::TYPE_QBE);
@@ -167,6 +168,132 @@ final class reference_reconciler {
                 );
             }
         }
+    }
+
+    /**
+     * Resolves categories from their copied module and hierarchy.
+     *
+     * This is the stable fallback for Moodle 5.1, where top and empty category
+     * stamps may be replaced while categories move to the restored qbank.
+     *
+     * @param \stdClass $operation Operation record.
+     */
+    private function resolve_categories_by_structure(\stdClass $operation): void {
+        global $DB;
+
+        $modulemap = [];
+        $modulemappings = operation_repository::get_mappings(
+            $operation->restoreid,
+            operation_repository::TYPE_MODULE,
+        );
+        foreach ($modulemappings as $mapping) {
+            if ($mapping->newid) {
+                $modulemap[(int) $mapping->oldid] = (int) $mapping->newid;
+            }
+        }
+        if (!$modulemap) {
+            return;
+        }
+
+        $targetcoursecontext = \context_course::instance($operation->targetcourseid);
+        do {
+            $changed = false;
+            $mappings = operation_repository::get_mappings(
+                $operation->restoreid,
+                operation_repository::TYPE_CATEGORY,
+            );
+            $categorymap = [];
+            foreach ($mappings as $mapping) {
+                $categorymap[(int) $mapping->oldid] = $mapping;
+            }
+
+            foreach ($mappings as $mapping) {
+                if ($mapping->newid) {
+                    continue;
+                }
+                $sourcecategory = $DB->get_record(
+                    'question_categories',
+                    ['id' => $mapping->oldid],
+                );
+                if (!$sourcecategory) {
+                    continue;
+                }
+                $sourcecontext = \context::instance_by_id((int) $sourcecategory->contextid, IGNORE_MISSING);
+                if (!$sourcecontext || $sourcecontext->contextlevel !== CONTEXT_MODULE) {
+                    continue;
+                }
+                $targetcmid = $modulemap[(int) $sourcecontext->instanceid] ?? 0;
+                $targetcontext = $targetcmid
+                    ? \context_module::instance($targetcmid, IGNORE_MISSING)
+                    : null;
+                if (!$targetcontext || !$targetcoursecontext->is_parent_of($targetcontext, true)) {
+                    continue;
+                }
+
+                $targetparentid = 0;
+                if ($sourcecategory->parent) {
+                    $parentmapping = $categorymap[(int) $sourcecategory->parent] ?? null;
+                    if (!$parentmapping || !$parentmapping->newid) {
+                        continue;
+                    }
+                    $targetparentid = (int) $parentmapping->newid;
+                }
+
+                $candidates = $DB->get_records('question_categories', [
+                    'contextid' => $targetcontext->id,
+                    'parent' => $targetparentid,
+                    'name' => $sourcecategory->name,
+                ]);
+                $targetcategory = $this->choose_structural_category($sourcecategory, $candidates);
+                if (!$targetcategory) {
+                    continue;
+                }
+
+                operation_repository::upsert_mapping(
+                    $operation->restoreid,
+                    operation_repository::TYPE_CATEGORY,
+                    (int) $mapping->oldid,
+                    (int) $targetcategory->id,
+                    (int) $sourcecategory->contextid,
+                    (int) $targetcategory->contextid,
+                    $mapping->marker,
+                );
+                $changed = true;
+            }
+        } while ($changed);
+    }
+
+    /**
+     * Selects one unambiguous structural category match.
+     *
+     * @param \stdClass $sourcecategory Source category.
+     * @param \stdClass[] $candidates Destination candidates.
+     * @return \stdClass|null
+     */
+    private function choose_structural_category(\stdClass $sourcecategory, array $candidates): ?\stdClass {
+        if (count($candidates) === 1) {
+            return reset($candidates);
+        }
+        if (!$candidates) {
+            return null;
+        }
+
+        $sameidnumber = array_filter(
+            $candidates,
+            static fn(\stdClass $candidate): bool => $candidate->idnumber === $sourcecategory->idnumber,
+        );
+        if (count($sameidnumber) === 1) {
+            return reset($sameidnumber);
+        }
+        if ($sameidnumber) {
+            $candidates = $sameidnumber;
+        }
+
+        $samesortorder = array_filter(
+            $candidates,
+            static fn(\stdClass $candidate): bool => (int) $candidate->sortorder === (int) $sourcecategory->sortorder,
+        );
+        return count($samesortorder) === 1 ? reset($samesortorder) : null;
     }
 
     /**

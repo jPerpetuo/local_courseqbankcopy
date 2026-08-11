@@ -53,10 +53,20 @@ final class reference_reconciler_test extends advanced_testcase {
         $questiongenerator = $generator->get_plugin_generator('core_question');
         $sourcecategory = $questiongenerator->create_question_category([
             'contextid' => context_course::instance($sourcecourse->id)->id,
+            'name' => 'Random bank category',
         ]);
         $targetcategory = $questiongenerator->create_question_category([
             'contextid' => context_course::instance($targetcourse->id)->id,
+            'name' => 'Random bank category',
         ]);
+        $sourcebankcontext = \context::instance_by_id($sourcecategory->contextid);
+        $targetbankcontext = \context::instance_by_id($targetcategory->contextid);
+        $sourcetopcategory = $DB->get_record(
+            'question_categories',
+            ['id' => $sourcecategory->parent],
+            '*',
+            MUST_EXIST,
+        );
         $sourcequestion = $questiongenerator->create_question('truefalse', null, [
             'category' => $sourcecategory->id,
         ]);
@@ -146,11 +156,19 @@ final class reference_reconciler_test extends advanced_testcase {
         );
         operation_repository::upsert_mapping(
             $restoreid,
+            operation_repository::TYPE_MODULE,
+            $sourcebankcontext->instanceid,
+            $targetbankcontext->instanceid,
+        );
+        operation_repository::upsert_mapping(
+            $restoreid,
+            operation_repository::TYPE_CATEGORY,
+            $sourcetopcategory->id,
+        );
+        operation_repository::upsert_mapping(
+            $restoreid,
             operation_repository::TYPE_CATEGORY,
             $sourcecategory->id,
-            $targetcategory->id,
-            $sourcecategory->contextid,
-            $targetcategory->contextid,
         );
 
         $quizcontext = context_module::instance($targetquiz->cmid);
