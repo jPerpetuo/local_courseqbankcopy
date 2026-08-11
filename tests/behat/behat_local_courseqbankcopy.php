@@ -162,8 +162,8 @@ final class behat_local_courseqbankcopy extends behat_base {
 
         $sourcecourse = $DB->get_record('course', ['shortname' => $sourceshortname], '*', MUST_EXIST);
         $targetcourse = $DB->get_record('course', ['shortname' => $targetshortname], '*', MUST_EXIST);
-        $sourcecategories = $this->get_course_question_categories($sourcecourse);
-        $targetcategories = $this->get_course_question_categories($targetcourse);
+        $sourcecontext = context_course::instance($sourcecourse->id);
+        $targetcontext = context_course::instance($targetcourse->id);
         $sourcereferences = $this->get_quiz_question_set_references($sourcecourse, $quizname);
         $targetreferences = $this->get_quiz_question_set_references($targetcourse, $quizname);
 
@@ -175,6 +175,7 @@ final class behat_local_courseqbankcopy extends behat_base {
         }
 
         foreach ($targetreferences as $reference) {
+            $questionscontext = context::instance_by_id((int) $reference->questionscontextid, IGNORE_MISSING);
             $categoryids = $this->get_reference_category_ids($reference);
             if (!$categoryids) {
                 throw new ExpectationException(
@@ -183,15 +184,33 @@ final class behat_local_courseqbankcopy extends behat_base {
                 );
             }
             if (
-                in_array((int) $reference->questionscontextid, $sourcecategories['contexts'], true)
-                    || !in_array((int) $reference->questionscontextid, $targetcategories['contexts'], true)
-                    || array_intersect($categoryids, $sourcecategories['ids'])
-                    || array_diff($categoryids, $targetcategories['ids'])
+                !$questionscontext
+                    || !$targetcontext->is_parent_of($questionscontext, true)
+                    || $sourcecontext->is_parent_of($questionscontext, true)
             ) {
                 throw new ExpectationException(
                     'The imported random question still uses a category or context outside the target course.',
                     $this->getSession(),
                 );
+            }
+            foreach ($categoryids as $categoryid) {
+                $categorycontextid = $DB->get_field(
+                    'question_categories',
+                    'contextid',
+                    ['id' => $categoryid],
+                    MUST_EXIST,
+                );
+                $categorycontext = context::instance_by_id((int) $categorycontextid, IGNORE_MISSING);
+                if (
+                    !$categorycontext
+                        || !$targetcontext->is_parent_of($categorycontext, true)
+                        || $sourcecontext->is_parent_of($categorycontext, true)
+                ) {
+                    throw new ExpectationException(
+                        'The imported random question filter still contains a category outside the target course.',
+                        $this->getSession(),
+                    );
+                }
             }
         }
 
@@ -265,34 +284,6 @@ final class behat_local_courseqbankcopy extends behat_base {
         );
 
         return array_map('intval', $entries);
-    }
-
-    /**
-     * Returns the question category and context IDs owned by a course context hierarchy.
-     *
-     * @param stdClass $course Course record.
-     * @return array{ids:int[],contexts:int[]}
-     */
-    private function get_course_question_categories(stdClass $course): array {
-        global $DB;
-
-        $coursecontext = context_course::instance($course->id);
-        $pathlike = $DB->sql_like('ctx.path', ':contextpath');
-        $sql = "SELECT qc.id, qc.contextid
-                  FROM {question_categories} qc
-                  JOIN {context} ctx ON ctx.id = qc.contextid
-                 WHERE {$pathlike}";
-        $categories = $DB->get_records_sql($sql, [
-            'contextpath' => $coursecontext->path . '/%',
-        ]);
-
-        return [
-            'ids' => array_map('intval', array_keys($categories)),
-            'contexts' => array_values(array_unique(array_map(
-                static fn(stdClass $category): int => (int) $category->contextid,
-                $categories,
-            ))),
-        ];
     }
 
     /**
