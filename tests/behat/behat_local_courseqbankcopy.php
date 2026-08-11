@@ -217,6 +217,9 @@ final class behat_local_courseqbankcopy extends behat_base {
                     'targetcontextpath' => $targetcontext->path,
                     'filtercondition' => $reference->filtercondition,
                     'categorymappings' => array_values($categorymappings),
+                    'sourcereferences' => array_values($sourcereferences),
+                    'sourcecategories' => $this->get_course_category_diagnostics($sourcecontext),
+                    'targetcategories' => $this->get_course_category_diagnostics($targetcontext),
                 ], JSON_UNESCAPED_SLASHES);
                 throw new ExpectationException(
                     'The imported random question still uses a context outside the target course: ' . $details,
@@ -355,5 +358,38 @@ final class behat_local_courseqbankcopy extends behat_base {
         }
 
         return array_values(array_unique(array_filter($categoryids)));
+    }
+
+    /**
+     * Returns question category details used only to diagnose a failed functional test.
+     *
+     * @param context_course $coursecontext Course context.
+     * @return array<int, array<string, mixed>>
+     */
+    private function get_course_category_diagnostics(context_course $coursecontext): array {
+        global $DB;
+
+        $pathlike = $DB->sql_like('ctx.path', ':contextpath');
+        $categories = $DB->get_records_sql(
+            "SELECT qc.*
+               FROM {question_categories} qc
+               JOIN {context} ctx ON ctx.id = qc.contextid
+              WHERE {$pathlike}",
+            ['contextpath' => $coursecontext->path . '/%'],
+        );
+        $details = [];
+        foreach ($categories as $category) {
+            $details[] = [
+                'id' => (int) $category->id,
+                'name' => $category->name,
+                'parent' => (int) $category->parent,
+                'contextid' => (int) $category->contextid,
+                'stamp' => $category->stamp,
+                'entries' => $DB->count_records('question_bank_entries', [
+                    'questioncategoryid' => $category->id,
+                ]),
+            ];
+        }
+        return $details;
     }
 }
