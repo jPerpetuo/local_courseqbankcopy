@@ -32,12 +32,7 @@ Feature: Import a course with an independent question bank
 
   @javascript
   Scenario: Import repoints random questions to the copied category
-    Given the following "questions" exist:
-      | questioncategory     | qtype  | name                    |
-      | Source question bank | random | Random from source bank |
-    And quiz "Source quiz" contains the following questions:
-      | question                | page |
-      | Random from source bank | 1    |
+    Given quiz "Source quiz" in course "CQBC1" has a random question from category "Source question bank"
     And I log in as "admin"
     When I import "Source course" course into "Target course" course using this options:
     Then quiz "Source quiz" in course "CQBC2" uses random questions copied from course "CQBC1"

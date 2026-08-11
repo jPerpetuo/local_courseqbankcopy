@@ -16,6 +16,7 @@
 
 use Behat\Mink\Exception\ExpectationException;
 use local_courseqbankcopy\local\operation_repository;
+use mod_quiz\quiz_settings;
 
 require_once(__DIR__ . '/../../../../lib/behat/behat_base.php');
 
@@ -28,6 +29,54 @@ require_once(__DIR__ . '/../../../../lib/behat/behat_base.php');
  * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 final class behat_local_courseqbankcopy extends behat_base {
+    /**
+     * Adds one random question using the quiz structure API shared by Moodle 5.1 and 5.2.
+     *
+     * @Given /^quiz "([^"]*)" in course "([^"]*)" has a random question from category "([^"]*)"$/
+     * @param string $quizname Quiz name.
+     * @param string $courseshortname Course short name.
+     * @param string $categoryname Question category name.
+     */
+    public function quiz_should_have_random_question_from_category(
+        string $quizname,
+        string $courseshortname,
+        string $categoryname
+    ): void {
+        global $DB;
+
+        $course = $DB->get_record('course', ['shortname' => $courseshortname], '*', MUST_EXIST);
+        $quiz = $DB->get_record('quiz', [
+            'course' => $course->id,
+            'name' => $quizname,
+        ], '*', MUST_EXIST);
+        $coursecontext = context_course::instance($course->id);
+        $pathlike = $DB->sql_like('ctx.path', ':contextpath');
+        $category = $DB->get_record_sql(
+            "SELECT qc.*
+               FROM {question_categories} qc
+               JOIN {context} ctx ON ctx.id = qc.contextid
+              WHERE qc.name = :categoryname AND {$pathlike}",
+            [
+                'categoryname' => $categoryname,
+                'contextpath' => $coursecontext->path . '/%',
+            ],
+            MUST_EXIST,
+        );
+
+        $filtercondition = [
+            'filter' => [
+                'category' => [
+                    'jointype' => \qbank_managecategories\category_condition::JOINTYPE_DEFAULT,
+                    'values' => [(int) $category->id],
+                    'filteroptions' => ['includesubcategories' => false],
+                ],
+            ],
+        ];
+        $settings = quiz_settings::create($quiz->id);
+        $structure = \mod_quiz\structure::create_for_quiz($settings);
+        $structure->add_random_questions(1, 1, $filtercondition);
+    }
+
     /**
      * Confirms that an imported quiz and the complete bank are independent from the source course.
      *
