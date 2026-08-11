@@ -113,7 +113,6 @@ final class backup_package_transformer {
         }
 
         $currentcategoryid = null;
-        $categorynamepending = false;
         $categorycount = 0;
         $questioncount = 0;
 
@@ -121,17 +120,6 @@ final class backup_package_transformer {
             while (($line = fgets($input)) !== false) {
                 if (preg_match('/<question_category\s+id="(\d+)"/', $line, $matches)) {
                     $currentcategoryid = (int) $matches[1];
-                    $categorynamepending = true;
-                }
-                if (
-                    $currentcategoryid !== null
-                        && $categorynamepending
-                        && preg_match('/<name>.*?<\/name>/', $line)
-                ) {
-                    $namemarker = self::category_name_marker($token, $currentcategoryid);
-                    $escapedmarker = htmlspecialchars($namemarker, ENT_XML1 | ENT_COMPAT, 'UTF-8');
-                    $line = preg_replace('/<name>.*?<\/name>/', '<name>' . $escapedmarker . '</name>', $line, 1);
-                    $categorynamepending = false;
                 }
                 if (preg_match('/<question\s+id="\d+"/', $line)) {
                     $questioncount++;
@@ -147,13 +135,12 @@ final class backup_package_transformer {
                         0,
                         0,
                         0,
-                        self::category_name_marker($token, $currentcategoryid),
+                        $marker,
                     );
                     $categorycount++;
                 }
                 if (str_contains($line, '</question_category>')) {
                     $currentcategoryid = null;
-                    $categorynamepending = false;
                 }
                 if (fwrite($output, $line) === false) {
                     throw new \moodle_exception('cannottransformquestions', 'local_courseqbankcopy');
@@ -239,17 +226,6 @@ final class backup_package_transformer {
      */
     public static function category_marker(string $token, int $categoryid, string $oldstamp): string {
         return 'cqbc_' . substr(hash('sha256', $token . ':' . $categoryid . ':' . $oldstamp), 0, 40);
-    }
-
-    /**
-     * Builds a temporary category-name marker that survives stamp replacement.
-     *
-     * @param string $token Operation token.
-     * @param int $categoryid Original category ID.
-     * @return string
-     */
-    public static function category_name_marker(string $token, int $categoryid): string {
-        return 'cqbc_category_' . substr(hash('sha256', $token . ':' . $categoryid), 0, 40);
     }
 
     /**

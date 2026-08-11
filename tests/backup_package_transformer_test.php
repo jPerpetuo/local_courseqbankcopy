@@ -41,15 +41,12 @@ final class backup_package_transformer_test extends advanced_testcase {
         $first = backup_package_transformer::category_marker('token-a', 10, 'original');
         $same = backup_package_transformer::category_marker('token-a', 10, 'original');
         $other = backup_package_transformer::category_marker('token-b', 10, 'original');
-        $categoryname = backup_package_transformer::category_name_marker('token-a', 10);
         $module = backup_package_transformer::module_marker('token-a', 20);
 
         $this->assertSame($first, $same);
         $this->assertNotSame($first, $other);
         $this->assertStringStartsWith('cqbc_', $first);
-        $this->assertStringStartsWith('cqbc_category_', $categoryname);
         $this->assertStringStartsWith('cqbc_module_', $module);
-        $this->assertLessThanOrEqual(255, strlen($categoryname));
         $this->assertLessThanOrEqual(64, strlen($module));
     }
 
@@ -96,7 +93,7 @@ XML;
     }
 
     /**
-     * The transformer replaces category names and stamps without changing question names.
+     * The transformer replaces category stamps and counts questions without loading the full XML.
      */
     public function test_transform_replaces_category_stamps(): void {
         global $DB;
@@ -112,14 +109,12 @@ XML;
 <?xml version="1.0" encoding="UTF-8"?>
 <question_categories>
   <question_category id="10">
-    <name>Categoria original um</name>
     <stamp>stamp-one</stamp>
-    <questions><question id="101"><name>Questão original um</name></question></questions>
+    <questions><question id="101"></question></questions>
   </question_category>
   <question_category id="20">
-    <name>Categoria original dois</name>
     <stamp>stamp-two</stamp>
-    <questions><question id="201"><name>Questão original dois</name></question><question id="202"></question></questions>
+    <questions><question id="201"></question><question id="202"></question></questions>
   </question_category>
 </question_categories>
 XML;
@@ -136,14 +131,6 @@ XML;
         $this->assertSame(2, $result['questions']);
         $this->assertStringNotContainsString('stamp-one', $transformed);
         $this->assertStringNotContainsString('stamp-two', $transformed);
-        $this->assertStringNotContainsString('Categoria original um', $transformed);
-        $this->assertStringNotContainsString('Categoria original dois', $transformed);
-        $this->assertStringContainsString('Questão original um', $transformed);
-        $this->assertStringContainsString('Questão original dois', $transformed);
-        $this->assertStringContainsString(
-            backup_package_transformer::category_name_marker(str_repeat('b', 32), 10),
-            $transformed,
-        );
         $this->assertSame(
             2,
             $DB->count_records('local_courseqbankcopy_map', [

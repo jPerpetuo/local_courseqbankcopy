@@ -274,7 +274,7 @@ final class reference_reconciler {
     }
 
     /**
-     * Resolves categories by their transformed name or legacy stamp marker.
+     * Resolves empty categories by their transformed stamp.
      *
      * @param \stdClass $operation Operation record.
      */
@@ -291,30 +291,20 @@ final class reference_reconciler {
                 "SELECT qc.id, qc.contextid
                    FROM {question_categories} qc
                    JOIN {context} ctx ON ctx.id = qc.contextid
-                  WHERE (qc.name = :namemarker OR qc.stamp = :stampmarker)
-                    AND {$like}",
+                  WHERE qc.stamp = :marker AND {$like}",
                 [
-                    'namemarker' => $mapping->marker,
-                    'stampmarker' => $mapping->marker,
+                    'marker' => $mapping->marker,
                     'contextpath' => $coursecontext->path . '/%',
                 ],
                 IGNORE_MULTIPLE,
             );
             if ($record) {
-                $sourcecategory = $DB->get_record(
-                    'question_categories',
-                    ['id' => $mapping->oldid],
-                    'id, name, contextid',
-                );
-                if ($sourcecategory && $DB->get_field('question_categories', 'name', ['id' => $record->id]) === $mapping->marker) {
-                    $DB->set_field('question_categories', 'name', $sourcecategory->name, ['id' => $record->id]);
-                }
                 operation_repository::upsert_mapping(
                     $operation->restoreid,
                     operation_repository::TYPE_CATEGORY,
                     (int) $mapping->oldid,
                     (int) $record->id,
-                    $sourcecategory ? (int) $sourcecategory->contextid : (int) $mapping->oldparentid,
+                    (int) $mapping->oldparentid,
                     (int) $record->contextid,
                     $mapping->marker,
                 );
@@ -379,6 +369,21 @@ final class reference_reconciler {
                     ? \context_module::instance($targetcmid, IGNORE_MISSING)
                     : null;
                 if (!$targetcontext || !$targetcoursecontext->is_parent_of($targetcontext, true)) {
+                    continue;
+                }
+
+                if (empty($sourcecategory->parent)) {
+                    $targetcategory = question_get_top_category($targetcontext->id, true);
+                    operation_repository::upsert_mapping(
+                        $operation->restoreid,
+                        operation_repository::TYPE_CATEGORY,
+                        (int) $mapping->oldid,
+                        (int) $targetcategory->id,
+                        (int) $sourcecategory->contextid,
+                        (int) $targetcategory->contextid,
+                        $mapping->marker,
+                    );
+                    $changed = true;
                     continue;
                 }
 
