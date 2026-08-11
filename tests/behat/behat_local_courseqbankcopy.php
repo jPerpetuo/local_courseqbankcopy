@@ -55,7 +55,13 @@ final class behat_local_courseqbankcopy extends behat_base {
             "SELECT qc.*
                FROM {question_categories} qc
                JOIN {context} ctx ON ctx.id = qc.contextid
-              WHERE qc.name = :categoryname AND {$pathlike}",
+              WHERE qc.name = :categoryname
+                AND {$pathlike}
+                AND EXISTS (
+                    SELECT 1
+                      FROM {question_bank_entries} qbe
+                     WHERE qbe.questioncategoryid = qc.id
+                )",
             [
                 'categoryname' => $categoryname,
                 'contextpath' => $coursecontext->path . '/%',
