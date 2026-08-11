@@ -53,20 +53,10 @@ final class reference_reconciler_test extends advanced_testcase {
         $questiongenerator = $generator->get_plugin_generator('core_question');
         $sourcecategory = $questiongenerator->create_question_category([
             'contextid' => context_course::instance($sourcecourse->id)->id,
-            'name' => 'Random bank category',
         ]);
         $targetcategory = $questiongenerator->create_question_category([
             'contextid' => context_course::instance($targetcourse->id)->id,
-            'name' => 'Random bank category',
         ]);
-        $sourcebankcontext = \context::instance_by_id($sourcecategory->contextid);
-        $targetbankcontext = \context::instance_by_id($targetcategory->contextid);
-        $sourcetopcategory = $DB->get_record(
-            'question_categories',
-            ['id' => $sourcecategory->parent],
-            '*',
-            MUST_EXIST,
-        );
         $sourcequestion = $questiongenerator->create_question('truefalse', null, [
             'category' => $sourcecategory->id,
         ]);
@@ -136,10 +126,20 @@ final class reference_reconciler_test extends advanced_testcase {
         $questiongenerator = $generator->get_plugin_generator('core_question');
         $sourcecategory = $questiongenerator->create_question_category([
             'contextid' => context_course::instance($sourcecourse->id)->id,
+            'name' => 'Random bank category',
         ]);
         $targetcategory = $questiongenerator->create_question_category([
             'contextid' => context_course::instance($targetcourse->id)->id,
+            'name' => 'Random bank category',
         ]);
+        $sourcebankcontext = \context::instance_by_id($sourcecategory->contextid);
+        $targetbankcontext = \context::instance_by_id($targetcategory->contextid);
+        $sourcetopcategory = $DB->get_record(
+            'question_categories',
+            ['id' => $sourcecategory->parent],
+            '*',
+            MUST_EXIST,
+        );
 
         $restoreid = str_repeat('c', 32);
         operation_repository::create(
