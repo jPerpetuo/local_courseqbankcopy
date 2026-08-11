@@ -92,6 +92,8 @@ final class backup_package_transformer {
      * @return array{categories:int,questions:int}
      */
     public function transform(string $tempdir, string $restoreid, string $token): array {
+        $this->transform_question_bank_modules($tempdir, $restoreid, $token);
+
         $questionsfile = rtrim($tempdir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'questions.xml';
         if (!is_readable($questionsfile)) {
             return ['categories' => 0, 'questions' => 0];
@@ -161,6 +163,60 @@ final class backup_package_transformer {
     }
 
     /**
+     * Gives each qbank module a temporary identity that survives the restore.
+     *
+     * @param string $tempdir Backup temporary directory.
+     * @param string $restoreid Backup/restore ID.
+     * @param string $token Operation token.
+     */
+    private function transform_question_bank_modules(string $tempdir, string $restoreid, string $token): void {
+        $activitiesdir = rtrim($tempdir, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'activities';
+        $directories = glob($activitiesdir . DIRECTORY_SEPARATOR . 'qbank_*', GLOB_ONLYDIR);
+        if (!$directories) {
+            return;
+        }
+
+        foreach ($directories as $directory) {
+            if (!preg_match('/^qbank_(\d+)$/', basename($directory), $matches)) {
+                continue;
+            }
+
+            $sourcecmid = (int) $matches[1];
+            $qbankfile = $directory . DIRECTORY_SEPARATOR . 'qbank.xml';
+            if (!is_readable($qbankfile)) {
+                throw new \moodle_exception('cannottransformquestions', 'local_courseqbankcopy');
+            }
+
+            $previous = libxml_use_internal_errors(true);
+            $xml = simplexml_load_file($qbankfile);
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+            $namenodes = $xml ? $xml->xpath('/activity/qbank/name') : false;
+            if (!$xml || !$namenodes || count($namenodes) !== 1) {
+                throw new \moodle_exception('cannottransformquestions', 'local_courseqbankcopy');
+            }
+
+            $marker = self::module_marker($token, $sourcecmid);
+            $namenodes[0][0] = $marker;
+            $temporaryfile = $qbankfile . '.courseqbankcopy-' . $token . '.tmp';
+            if ($xml->asXML($temporaryfile) === false || !rename($temporaryfile, $qbankfile)) {
+                @unlink($temporaryfile);
+                throw new \moodle_exception('cannottransformquestions', 'local_courseqbankcopy');
+            }
+
+            operation_repository::upsert_mapping(
+                $restoreid,
+                operation_repository::TYPE_MODULE,
+                $sourcecmid,
+                0,
+                0,
+                0,
+                $marker,
+            );
+        }
+    }
+
+    /**
      * Builds a deterministic and unique category stamp for one operation.
      *
      * @param string $token Operation token.
@@ -170,5 +226,16 @@ final class backup_package_transformer {
      */
     public static function category_marker(string $token, int $categoryid, string $oldstamp): string {
         return 'cqbc_' . substr(hash('sha256', $token . ':' . $categoryid . ':' . $oldstamp), 0, 40);
+    }
+
+    /**
+     * Builds a deterministic module marker for one operation.
+     *
+     * @param string $token Operation token.
+     * @param int $sourcecmid Original course-module ID.
+     * @return string
+     */
+    public static function module_marker(string $token, int $sourcecmid): string {
+        return 'cqbc_module_' . substr(hash('sha256', $token . ':' . $sourcecmid), 0, 40);
     }
 }

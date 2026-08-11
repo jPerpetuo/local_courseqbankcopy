@@ -26,6 +26,7 @@ namespace local_courseqbankcopy;
 use advanced_testcase;
 use context_course;
 use context_module;
+use local_courseqbankcopy\local\backup_package_transformer;
 use local_courseqbankcopy\local\operation_repository;
 use local_courseqbankcopy\local\reference_reconciler;
 use PHPUnit\Framework\Attributes\CoversClass;
@@ -112,7 +113,7 @@ final class reference_reconciler_test extends advanced_testcase {
      * Random references are moved to the destination category and question-bank context.
      */
     public function test_reconcile_repoints_random_question_reference(): void {
-        global $CFG, $DB;
+        global $DB;
 
         $this->resetAfterTest();
         $this->setAdminUser();
@@ -134,6 +135,20 @@ final class reference_reconciler_test extends advanced_testcase {
         ]);
         $sourcebankcontext = \context::instance_by_id($sourcecategory->contextid);
         $targetbankcontext = \context::instance_by_id($targetcategory->contextid);
+        $sourcebankcm = $DB->get_record(
+            'course_modules',
+            ['id' => $sourcebankcontext->instanceid],
+            '*',
+            MUST_EXIST,
+        );
+        $targetbankcm = $DB->get_record(
+            'course_modules',
+            ['id' => $targetbankcontext->instanceid],
+            '*',
+            MUST_EXIST,
+        );
+        $sourceqbank = $DB->get_record('qbank', ['id' => $sourcebankcm->instance], '*', MUST_EXIST);
+        $targetqbank = $DB->get_record('qbank', ['id' => $targetbankcm->instance], '*', MUST_EXIST);
         $sourcetopcategory = $DB->get_record(
             'question_categories',
             ['id' => $sourcecategory->parent],
@@ -165,18 +180,17 @@ final class reference_reconciler_test extends advanced_testcase {
             $sourcecategory->id,
         );
 
-        require_once($CFG->dirroot . '/backup/util/includes/backup_includes.php');
-        $dbman = $DB->get_manager();
-        $createdtemptable = !$dbman->table_exists('backup_ids_temp');
-        if ($createdtemptable) {
-            \backup_controller_dbops::create_backup_ids_temp_table($restoreid);
-        }
-        $DB->insert_record('backup_ids_temp', (object) [
-            'backupid' => $restoreid,
-            'itemname' => 'course_module',
-            'itemid' => $sourcebankcontext->instanceid,
-            'newitemid' => $targetbankcontext->instanceid,
-        ]);
+        $modulemarker = backup_package_transformer::module_marker(str_repeat('d', 32), $sourcebankcm->id);
+        $DB->set_field('qbank', 'name', $modulemarker, ['id' => $targetqbank->id]);
+        operation_repository::upsert_mapping(
+            $restoreid,
+            operation_repository::TYPE_MODULE,
+            $sourcebankcm->id,
+            0,
+            0,
+            0,
+            $modulemarker,
+        );
 
         $quizcontext = context_module::instance($targetquiz->cmid);
         $referenceid = $DB->insert_record('question_set_references', (object) [
@@ -193,29 +207,22 @@ final class reference_reconciler_test extends advanced_testcase {
             ], JSON_THROW_ON_ERROR),
         ]);
 
-        try {
-            $result = (new reference_reconciler())->reconcile($restoreid);
-            $reference = $DB->get_record('question_set_references', ['id' => $referenceid], '*', MUST_EXIST);
-            $condition = json_decode($reference->filtercondition, true, 512, JSON_THROW_ON_ERROR);
-            $operation = operation_repository::get($restoreid);
+        $result = (new reference_reconciler())->reconcile($restoreid);
+        $reference = $DB->get_record('question_set_references', ['id' => $referenceid], '*', MUST_EXIST);
+        $condition = json_decode($reference->filtercondition, true, 512, JSON_THROW_ON_ERROR);
+        $operation = operation_repository::get($restoreid);
 
-            $this->assertSame(['fixed' => 0, 'random' => 1], $result);
-            $this->assertEquals($targetcategory->contextid, $reference->questionscontextid);
-            $this->assertEquals($targetcategory->id, $condition['filter']['category']['values'][0]);
-            $this->assertSame(
-                $targetcategory->id . ',' . $targetcategory->contextid,
-                $condition['cat'],
-            );
-            $this->assertNotEquals($sourcecategory->contextid, $reference->questionscontextid);
-            $this->assertNotNull($operation);
-            $this->assertSame(operation_repository::STATUS_COMPLETE, $operation->status);
-        } finally {
-            if ($createdtemptable) {
-                \backup_controller_dbops::drop_backup_ids_temp_table($restoreid);
-            } else {
-                $DB->delete_records('backup_ids_temp', ['backupid' => $restoreid]);
-            }
-        }
+        $this->assertSame(['fixed' => 0, 'random' => 1], $result);
+        $this->assertEquals($targetcategory->contextid, $reference->questionscontextid);
+        $this->assertEquals($targetcategory->id, $condition['filter']['category']['values'][0]);
+        $this->assertSame(
+            $targetcategory->id . ',' . $targetcategory->contextid,
+            $condition['cat'],
+        );
+        $this->assertNotEquals($sourcecategory->contextid, $reference->questionscontextid);
+        $this->assertSame($sourceqbank->name, $DB->get_field('qbank', 'name', ['id' => $targetqbank->id]));
+        $this->assertNotNull($operation);
+        $this->assertSame(operation_repository::STATUS_COMPLETE, $operation->status);
     }
 
     /**

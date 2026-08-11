@@ -41,10 +41,55 @@ final class backup_package_transformer_test extends advanced_testcase {
         $first = backup_package_transformer::category_marker('token-a', 10, 'original');
         $same = backup_package_transformer::category_marker('token-a', 10, 'original');
         $other = backup_package_transformer::category_marker('token-b', 10, 'original');
+        $module = backup_package_transformer::module_marker('token-a', 20);
 
         $this->assertSame($first, $same);
         $this->assertNotSame($first, $other);
         $this->assertStringStartsWith('cqbc_', $first);
+        $this->assertStringStartsWith('cqbc_module_', $module);
+        $this->assertLessThanOrEqual(64, strlen($module));
+    }
+
+    /**
+     * The transformer gives qbank activities a temporary identity and persists it.
+     */
+    public function test_transform_marks_question_bank_modules(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $source = $this->getDataGenerator()->create_course();
+        $target = $this->getDataGenerator()->create_course();
+        $restoreid = str_repeat('c', 32);
+        $token = str_repeat('d', 32);
+        operation_repository::create($restoreid, $source->id, $target->id, $token);
+
+        $tempdir = make_request_directory();
+        $activitydir = $tempdir . '/activities/qbank_456';
+        mkdir($tempdir . '/activities');
+        mkdir($activitydir);
+        $xml = <<<XML
+<?xml version="1.0" encoding="UTF-8"?>
+<activity id="99" moduleid="456" modulename="qbank">
+  <qbank id="77">
+    <name>Banco de questões original</name>
+    <type>standard</type>
+  </qbank>
+</activity>
+XML;
+        file_put_contents($activitydir . '/qbank.xml', $xml);
+
+        $result = (new backup_package_transformer())->transform($tempdir, $restoreid, $token);
+        $transformed = simplexml_load_file($activitydir . '/qbank.xml');
+        $mapping = $DB->get_record('local_courseqbankcopy_map', [
+            'restoreid' => $restoreid,
+            'itemtype' => operation_repository::TYPE_MODULE,
+            'oldid' => 456,
+        ], '*', MUST_EXIST);
+
+        $this->assertSame(['categories' => 0, 'questions' => 0], $result);
+        $this->assertSame(backup_package_transformer::module_marker($token, 456), (string) $transformed->qbank->name);
+        $this->assertSame($mapping->marker, (string) $transformed->qbank->name);
+        $this->assertEquals(0, $mapping->newid);
     }
 
     /**

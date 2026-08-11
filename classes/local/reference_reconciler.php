@@ -42,6 +42,7 @@ final class reference_reconciler {
         }
 
         operation_repository::set_status($restoreid, operation_repository::STATUS_RECONCILING);
+        $this->resolve_marked_module_mappings($operation);
         $this->resolve_core_module_mappings($operation);
         $this->resolve_core_category_mappings($operation);
         $this->resolve_pending_categories($operation);
@@ -68,11 +69,92 @@ final class reference_reconciler {
     }
 
     /**
+     * Resolves copied qbank modules by their temporary package marker.
+     *
+     * The original activity name is restored immediately after the destination
+     * course-module ID is persisted.
+     *
+     * @param \stdClass $operation Operation record.
+     */
+    private function resolve_marked_module_mappings(\stdClass $operation): void {
+        global $DB;
+
+        $qbankmoduleid = $DB->get_field('modules', 'id', ['name' => 'qbank']);
+        if (!$qbankmoduleid) {
+            return;
+        }
+
+        $renamed = false;
+        $mappings = operation_repository::get_mappings(
+            $operation->restoreid,
+            operation_repository::TYPE_MODULE,
+        );
+        foreach ($mappings as $mapping) {
+            if ($mapping->newid || !$mapping->marker) {
+                continue;
+            }
+
+            $sourcecm = $DB->get_record(
+                'course_modules',
+                [
+                    'id' => $mapping->oldid,
+                    'course' => $operation->sourcecourseid,
+                    'module' => $qbankmoduleid,
+                ],
+                'id, instance',
+            );
+            $sourceqbank = $sourcecm
+                ? $DB->get_record('qbank', ['id' => $sourcecm->instance], 'id, name')
+                : null;
+            $targetqbank = $DB->get_record(
+                'qbank',
+                [
+                    'course' => $operation->targetcourseid,
+                    'name' => $mapping->marker,
+                ],
+                'id, name',
+            );
+            if (!$sourceqbank || !$targetqbank) {
+                continue;
+            }
+
+            $DB->set_field('qbank', 'name', $sourceqbank->name, ['id' => $targetqbank->id]);
+            $renamed = true;
+
+            $targetcm = $DB->get_record(
+                'course_modules',
+                [
+                    'course' => $operation->targetcourseid,
+                    'module' => $qbankmoduleid,
+                    'instance' => $targetqbank->id,
+                ],
+                'id',
+            );
+            if (!$targetcm) {
+                continue;
+            }
+
+            operation_repository::upsert_mapping(
+                $operation->restoreid,
+                operation_repository::TYPE_MODULE,
+                (int) $mapping->oldid,
+                (int) $targetcm->id,
+                0,
+                0,
+                $mapping->marker,
+            );
+        }
+
+        if ($renamed) {
+            rebuild_course_cache((int) $operation->targetcourseid, true);
+        }
+    }
+
+    /**
      * Imports course-module mappings calculated by Moodle's native restore.
      *
-     * Moodle 5.1 may finish question-category processing without a usable
-     * category mapping. The course-module mapping remains authoritative and
-     * lets the structural fallback locate the copied qbank context.
+     * When the temporary restore table is still available, its course-module
+     * mapping is authoritative and complements the persistent package marker.
      *
      * @param \stdClass $operation Operation record.
      */
@@ -130,9 +212,8 @@ final class reference_reconciler {
     /**
      * Imports the final category mappings calculated by Moodle's native restore.
      *
-     * The restore event runs before Moodle discards backup_ids_temp. On Moodle
-     * 5.1 this is the authoritative mapping for top-level and empty categories,
-     * whose transformed stamp may not survive the native category move step.
+     * Some restore paths still expose backup_ids_temp when this observer runs.
+     * When available, it is authoritative for top-level and empty categories.
      *
      * @param \stdClass $operation Operation record.
      */
