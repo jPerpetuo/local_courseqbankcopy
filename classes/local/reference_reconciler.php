@@ -274,7 +274,7 @@ final class reference_reconciler {
     }
 
     /**
-     * Resolves empty categories by their transformed stamp.
+     * Resolves categories by their transformed name or legacy stamp marker.
      *
      * @param \stdClass $operation Operation record.
      */
@@ -291,20 +291,30 @@ final class reference_reconciler {
                 "SELECT qc.id, qc.contextid
                    FROM {question_categories} qc
                    JOIN {context} ctx ON ctx.id = qc.contextid
-                  WHERE qc.stamp = :marker AND {$like}",
+                  WHERE (qc.name = :namemarker OR qc.stamp = :stampmarker)
+                    AND {$like}",
                 [
-                    'marker' => $mapping->marker,
+                    'namemarker' => $mapping->marker,
+                    'stampmarker' => $mapping->marker,
                     'contextpath' => $coursecontext->path . '/%',
                 ],
                 IGNORE_MULTIPLE,
             );
             if ($record) {
+                $sourcecategory = $DB->get_record(
+                    'question_categories',
+                    ['id' => $mapping->oldid],
+                    'id, name, contextid',
+                );
+                if ($sourcecategory && $DB->get_field('question_categories', 'name', ['id' => $record->id]) === $mapping->marker) {
+                    $DB->set_field('question_categories', 'name', $sourcecategory->name, ['id' => $record->id]);
+                }
                 operation_repository::upsert_mapping(
                     $operation->restoreid,
                     operation_repository::TYPE_CATEGORY,
                     (int) $mapping->oldid,
                     (int) $record->id,
-                    (int) $mapping->oldparentid,
+                    $sourcecategory ? (int) $sourcecategory->contextid : (int) $mapping->oldparentid,
                     (int) $record->contextid,
                     $mapping->marker,
                 );

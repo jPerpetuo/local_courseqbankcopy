@@ -178,7 +178,18 @@ final class reference_reconciler_test extends advanced_testcase {
             $restoreid,
             operation_repository::TYPE_CATEGORY,
             $sourcecategory->id,
+            0,
+            0,
+            0,
+            backup_package_transformer::category_name_marker(str_repeat('d', 32), $sourcecategory->id),
         );
+
+        $categorymarker = backup_package_transformer::category_name_marker(
+            str_repeat('d', 32),
+            $sourcecategory->id,
+        );
+        $DB->set_field('question_categories', 'name', $categorymarker, ['id' => $targetcategory->id]);
+        $DB->set_field('question_categories', 'stamp', make_unique_id_code(), ['id' => $targetcategory->id]);
 
         $modulemarker = backup_package_transformer::module_marker(str_repeat('d', 32), $sourcebankcm->id);
         $DB->set_field('qbank', 'name', $modulemarker, ['id' => $targetqbank->id]);
@@ -220,6 +231,10 @@ final class reference_reconciler_test extends advanced_testcase {
             $condition['cat'],
         );
         $this->assertNotEquals($sourcecategory->contextid, $reference->questionscontextid);
+        $this->assertSame(
+            $sourcecategory->name,
+            $DB->get_field('question_categories', 'name', ['id' => $targetcategory->id]),
+        );
         $this->assertSame($sourceqbank->name, $DB->get_field('qbank', 'name', ['id' => $targetqbank->id]));
         $this->assertNotNull($operation);
         $this->assertSame(operation_repository::STATUS_COMPLETE, $operation->status);
