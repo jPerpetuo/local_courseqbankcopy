@@ -42,6 +42,7 @@ final class reference_reconciler {
         }
 
         operation_repository::set_status($restoreid, operation_repository::STATUS_RECONCILING);
+        $this->resolve_core_category_mappings($operation);
         $this->resolve_pending_categories($operation);
 
         $modulemappings = operation_repository::get_mappings($restoreid, operation_repository::TYPE_MODULE);
@@ -62,6 +63,71 @@ final class reference_reconciler {
 
         operation_repository::set_status($restoreid, operation_repository::STATUS_COMPLETE);
         return ['fixed' => $fixedcount, 'random' => $randomcount];
+    }
+
+    /**
+     * Imports the final category mappings calculated by Moodle's native restore.
+     *
+     * The restore event runs before Moodle discards backup_ids_temp. On Moodle
+     * 5.1 this is the authoritative mapping for top-level and empty categories,
+     * whose transformed stamp may not survive the native category move step.
+     *
+     * @param \stdClass $operation Operation record.
+     */
+    private function resolve_core_category_mappings(\stdClass $operation): void {
+        global $DB;
+
+        if (!$DB->get_manager()->table_exists('backup_ids_temp')) {
+            return;
+        }
+
+        $targetcoursecontext = \context_course::instance($operation->targetcourseid);
+        $mappings = operation_repository::get_mappings(
+            $operation->restoreid,
+            operation_repository::TYPE_CATEGORY,
+        );
+        foreach ($mappings as $mapping) {
+            $coremapping = $DB->get_record('backup_ids_temp', [
+                'backupid' => $operation->restoreid,
+                'itemname' => 'question_category',
+                'itemid' => $mapping->oldid,
+            ]);
+            if (!$coremapping || !$coremapping->newitemid) {
+                continue;
+            }
+
+            $targetcategory = $DB->get_record(
+                'question_categories',
+                ['id' => $coremapping->newitemid],
+                'id, contextid',
+            );
+            $targetcontext = $targetcategory
+                ? \context::instance_by_id((int) $targetcategory->contextid, IGNORE_MISSING)
+                : null;
+            if (!$targetcontext || !$targetcoursecontext->is_parent_of($targetcontext, true)) {
+                continue;
+            }
+
+            $sourcecontextid = (int) $mapping->oldparentid;
+            $sourcecategory = $DB->get_record(
+                'question_categories',
+                ['id' => $mapping->oldid],
+                'id, contextid',
+            );
+            if ($sourcecategory) {
+                $sourcecontextid = (int) $sourcecategory->contextid;
+            }
+
+            operation_repository::upsert_mapping(
+                $operation->restoreid,
+                operation_repository::TYPE_CATEGORY,
+                (int) $mapping->oldid,
+                (int) $targetcategory->id,
+                $sourcecontextid,
+                (int) $targetcategory->contextid,
+                $mapping->marker,
+            );
+        }
     }
 
     /**
@@ -289,8 +355,19 @@ final class reference_reconciler {
         foreach ($setreferences as $reference) {
             $condition = json_decode($reference->filtercondition, true);
             $categoryid = is_array($condition) ? $this->get_filter_category_id($condition) : 0;
+            $questionscontext = \context::instance_by_id((int) $reference->questionscontextid, IGNORE_MISSING);
+            $categorycontextid = $categoryid
+                ? $DB->get_field('question_categories', 'contextid', ['id' => $categoryid])
+                : 0;
+            $categorycontext = $categorycontextid
+                ? \context::instance_by_id((int) $categorycontextid, IGNORE_MISSING)
+                : null;
             if (
-                in_array((int) $reference->questionscontextid, $sourcecontextids, true)
+                !$questionscontext
+                    || !$coursecontext->is_parent_of($questionscontext, true)
+                    || !$categorycontext
+                    || !$coursecontext->is_parent_of($categorycontext, true)
+                    || in_array((int) $reference->questionscontextid, $sourcecontextids, true)
                     || in_array($categoryid, $sourcecategoryids, true)
             ) {
                 throw new \moodle_exception('randomreferencevalidationfailed', 'local_courseqbankcopy');

@@ -119,5 +119,9 @@ function xmldb_local_courseqbankcopy_upgrade(int $oldversion): bool {
         upgrade_plugin_savepoint(true, 2026081000, 'local', 'courseqbankcopy');
     }
 
+    if ($oldversion < 2026081100) {
+        upgrade_plugin_savepoint(true, 2026081100, 'local', 'courseqbankcopy');
+    }
+
     return true;
 }
