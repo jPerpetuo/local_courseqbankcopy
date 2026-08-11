@@ -42,6 +42,7 @@ final class reference_reconciler {
         }
 
         operation_repository::set_status($restoreid, operation_repository::STATUS_RECONCILING);
+        $this->resolve_core_module_mappings($operation);
         $this->resolve_core_category_mappings($operation);
         $this->resolve_pending_categories($operation);
         $this->resolve_categories_by_structure($operation);
@@ -64,6 +65,66 @@ final class reference_reconciler {
 
         operation_repository::set_status($restoreid, operation_repository::STATUS_COMPLETE);
         return ['fixed' => $fixedcount, 'random' => $randomcount];
+    }
+
+    /**
+     * Imports course-module mappings calculated by Moodle's native restore.
+     *
+     * Moodle 5.1 may finish question-category processing without a usable
+     * category mapping. The course-module mapping remains authoritative and
+     * lets the structural fallback locate the copied qbank context.
+     *
+     * @param \stdClass $operation Operation record.
+     */
+    private function resolve_core_module_mappings(\stdClass $operation): void {
+        global $DB;
+
+        try {
+            $mappings = $DB->get_records(
+                'backup_ids_temp',
+                [
+                    'backupid' => $operation->restoreid,
+                    'itemname' => 'course_module',
+                ],
+                '',
+                'itemid, newitemid',
+            );
+        } catch (\dml_exception) {
+            return;
+        }
+
+        foreach ($mappings as $mapping) {
+            if (!$mapping->newitemid) {
+                continue;
+            }
+
+            $sourcecm = $DB->get_record(
+                'course_modules',
+                ['id' => $mapping->itemid],
+                'id, course, module',
+            );
+            $targetcm = $DB->get_record(
+                'course_modules',
+                ['id' => $mapping->newitemid],
+                'id, course, module',
+            );
+            if (
+                !$sourcecm
+                    || !$targetcm
+                    || (int) $sourcecm->course !== (int) $operation->sourcecourseid
+                    || (int) $targetcm->course !== (int) $operation->targetcourseid
+                    || (int) $sourcecm->module !== (int) $targetcm->module
+            ) {
+                continue;
+            }
+
+            operation_repository::upsert_mapping(
+                $operation->restoreid,
+                operation_repository::TYPE_MODULE,
+                (int) $mapping->itemid,
+                (int) $mapping->newitemid,
+            );
+        }
     }
 
     /**

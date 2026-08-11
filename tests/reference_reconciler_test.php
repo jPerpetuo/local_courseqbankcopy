@@ -112,7 +112,7 @@ final class reference_reconciler_test extends advanced_testcase {
      * Random references are moved to the destination category and question-bank context.
      */
     public function test_reconcile_repoints_random_question_reference(): void {
-        global $DB;
+        global $CFG, $DB;
 
         $this->resetAfterTest();
         $this->setAdminUser();
@@ -156,12 +156,6 @@ final class reference_reconciler_test extends advanced_testcase {
         );
         operation_repository::upsert_mapping(
             $restoreid,
-            operation_repository::TYPE_MODULE,
-            $sourcebankcontext->instanceid,
-            $targetbankcontext->instanceid,
-        );
-        operation_repository::upsert_mapping(
-            $restoreid,
             operation_repository::TYPE_CATEGORY,
             $sourcetopcategory->id,
         );
@@ -170,6 +164,19 @@ final class reference_reconciler_test extends advanced_testcase {
             operation_repository::TYPE_CATEGORY,
             $sourcecategory->id,
         );
+
+        require_once($CFG->dirroot . '/backup/util/includes/backup_includes.php');
+        $dbman = $DB->get_manager();
+        $createdtemptable = !$dbman->table_exists('backup_ids_temp');
+        if ($createdtemptable) {
+            \backup_controller_dbops::create_backup_ids_temp_table($restoreid);
+        }
+        $DB->insert_record('backup_ids_temp', (object) [
+            'backupid' => $restoreid,
+            'itemname' => 'course_module',
+            'itemid' => $sourcebankcontext->instanceid,
+            'newitemid' => $targetbankcontext->instanceid,
+        ]);
 
         $quizcontext = context_module::instance($targetquiz->cmid);
         $referenceid = $DB->insert_record('question_set_references', (object) [
@@ -186,21 +193,29 @@ final class reference_reconciler_test extends advanced_testcase {
             ], JSON_THROW_ON_ERROR),
         ]);
 
-        $result = (new reference_reconciler())->reconcile($restoreid);
-        $reference = $DB->get_record('question_set_references', ['id' => $referenceid], '*', MUST_EXIST);
-        $condition = json_decode($reference->filtercondition, true, 512, JSON_THROW_ON_ERROR);
-        $operation = operation_repository::get($restoreid);
+        try {
+            $result = (new reference_reconciler())->reconcile($restoreid);
+            $reference = $DB->get_record('question_set_references', ['id' => $referenceid], '*', MUST_EXIST);
+            $condition = json_decode($reference->filtercondition, true, 512, JSON_THROW_ON_ERROR);
+            $operation = operation_repository::get($restoreid);
 
-        $this->assertSame(['fixed' => 0, 'random' => 1], $result);
-        $this->assertEquals($targetcategory->contextid, $reference->questionscontextid);
-        $this->assertEquals($targetcategory->id, $condition['filter']['category']['values'][0]);
-        $this->assertSame(
-            $targetcategory->id . ',' . $targetcategory->contextid,
-            $condition['cat'],
-        );
-        $this->assertNotEquals($sourcecategory->contextid, $reference->questionscontextid);
-        $this->assertNotNull($operation);
-        $this->assertSame(operation_repository::STATUS_COMPLETE, $operation->status);
+            $this->assertSame(['fixed' => 0, 'random' => 1], $result);
+            $this->assertEquals($targetcategory->contextid, $reference->questionscontextid);
+            $this->assertEquals($targetcategory->id, $condition['filter']['category']['values'][0]);
+            $this->assertSame(
+                $targetcategory->id . ',' . $targetcategory->contextid,
+                $condition['cat'],
+            );
+            $this->assertNotEquals($sourcecategory->contextid, $reference->questionscontextid);
+            $this->assertNotNull($operation);
+            $this->assertSame(operation_repository::STATUS_COMPLETE, $operation->status);
+        } finally {
+            if ($createdtemptable) {
+                \backup_controller_dbops::drop_backup_ids_temp_table($restoreid);
+            } else {
+                $DB->delete_records('backup_ids_temp', ['backupid' => $restoreid]);
+            }
+        }
     }
 
     /**
