@@ -97,6 +97,76 @@ final class behat_local_courseqbankcopy extends behat_base {
     }
 
     /**
+     * Confirms that imported random questions use only copied categories and contexts.
+     *
+     * @Then /^quiz "([^"]*)" in course "([^"]*)" uses random questions copied from course "([^"]*)"$/
+     * @param string $quizname Imported quiz name.
+     * @param string $targetshortname Target course short name.
+     * @param string $sourceshortname Source course short name.
+     */
+    public function quiz_should_use_copied_random_question_categories(
+        string $quizname,
+        string $targetshortname,
+        string $sourceshortname
+    ): void {
+        global $DB;
+
+        $sourcecourse = $DB->get_record('course', ['shortname' => $sourceshortname], '*', MUST_EXIST);
+        $targetcourse = $DB->get_record('course', ['shortname' => $targetshortname], '*', MUST_EXIST);
+        $sourcecategories = $this->get_course_question_categories($sourcecourse);
+        $targetcategories = $this->get_course_question_categories($targetcourse);
+        $sourcereferences = $this->get_quiz_question_set_references($sourcecourse, $quizname);
+        $targetreferences = $this->get_quiz_question_set_references($targetcourse, $quizname);
+
+        if (!$sourcereferences || count($sourcereferences) !== count($targetreferences)) {
+            throw new ExpectationException(
+                'The source or imported quiz does not contain the expected random question references.',
+                $this->getSession(),
+            );
+        }
+
+        foreach ($targetreferences as $reference) {
+            $categoryids = $this->get_reference_category_ids($reference);
+            if (!$categoryids) {
+                throw new ExpectationException(
+                    'An imported random question has no category in its filter condition.',
+                    $this->getSession(),
+                );
+            }
+            if (
+                in_array((int) $reference->questionscontextid, $sourcecategories['contexts'], true)
+                    || !in_array((int) $reference->questionscontextid, $targetcategories['contexts'], true)
+                    || array_intersect($categoryids, $sourcecategories['ids'])
+                    || array_diff($categoryids, $targetcategories['ids'])
+            ) {
+                throw new ExpectationException(
+                    'The imported random question still uses a category or context outside the target course.',
+                    $this->getSession(),
+                );
+            }
+        }
+
+        $operations = $DB->get_records(
+            'local_courseqbankcopy_ops',
+            [
+                'sourcecourseid' => $sourcecourse->id,
+                'targetcourseid' => $targetcourse->id,
+            ],
+            'timemodified DESC',
+            '*',
+            0,
+            1,
+        );
+        $operation = $operations ? reset($operations) : null;
+        if (!$operation || $operation->status !== operation_repository::STATUS_COMPLETE) {
+            throw new ExpectationException(
+                'The random question-bank copy operation did not finish successfully.',
+                $this->getSession(),
+            );
+        }
+    }
+
+    /**
      * Returns all question-bank entry IDs owned by a course context hierarchy.
      *
      * @param stdClass $course Course record.
@@ -146,5 +216,79 @@ final class behat_local_courseqbankcopy extends behat_base {
         );
 
         return array_map('intval', $entries);
+    }
+
+    /**
+     * Returns the question category and context IDs owned by a course context hierarchy.
+     *
+     * @param stdClass $course Course record.
+     * @return array{ids:int[],contexts:int[]}
+     */
+    private function get_course_question_categories(stdClass $course): array {
+        global $DB;
+
+        $coursecontext = context_course::instance($course->id);
+        $pathlike = $DB->sql_like('ctx.path', ':contextpath');
+        $sql = "SELECT qc.id, qc.contextid
+                  FROM {question_categories} qc
+                  JOIN {context} ctx ON ctx.id = qc.contextid
+                 WHERE {$pathlike}";
+        $categories = $DB->get_records_sql($sql, [
+            'contextpath' => $coursecontext->path . '/%',
+        ]);
+
+        return [
+            'ids' => array_map('intval', array_keys($categories)),
+            'contexts' => array_values(array_unique(array_map(
+                static fn(stdClass $category): int => (int) $category->contextid,
+                $categories,
+            ))),
+        ];
+    }
+
+    /**
+     * Returns the random-question references used by a quiz.
+     *
+     * @param stdClass $course Course record.
+     * @param string $quizname Quiz name.
+     * @return stdClass[]
+     */
+    private function get_quiz_question_set_references(stdClass $course, string $quizname): array {
+        global $DB;
+
+        $quiz = $DB->get_record('quiz', [
+            'course' => $course->id,
+            'name' => $quizname,
+        ], '*', MUST_EXIST);
+        $coursemodule = get_coursemodule_from_instance('quiz', $quiz->id, $course->id, false, MUST_EXIST);
+        $quizcontext = context_module::instance($coursemodule->id);
+
+        return $DB->get_records('question_set_references', [
+            'usingcontextid' => $quizcontext->id,
+            'component' => 'mod_quiz',
+        ]);
+    }
+
+    /**
+     * Reads all category IDs supported by the current and legacy random filter structures.
+     *
+     * @param stdClass $reference Random-question reference.
+     * @return int[]
+     */
+    private function get_reference_category_ids(stdClass $reference): array {
+        $condition = json_decode($reference->filtercondition, true);
+        if (!is_array($condition)) {
+            return [];
+        }
+
+        $categoryids = [];
+        foreach ($condition['filter']['category']['values'] ?? [] as $categoryid) {
+            $categoryids[] = (int) $categoryid;
+        }
+        if (!empty($condition['cat'])) {
+            $categoryids[] = (int) explode(',', (string) $condition['cat'])[0];
+        }
+
+        return array_values(array_unique(array_filter($categoryids)));
     }
 }

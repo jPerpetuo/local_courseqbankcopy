@@ -29,3 +29,15 @@ Feature: Import a course with an independent question bank
     Given I log in as "admin"
     When I import "Source course" course into "Target course" course using this options:
     Then course "CQBC2" has an independent bank copied from "CQBC1" for quiz "Source quiz"
+
+  @javascript
+  Scenario: Import repoints random questions to the copied category
+    Given the following "questions" exist:
+      | questioncategory     | qtype  | name                    |
+      | Source question bank | random | Random from source bank |
+    And quiz "Source quiz" contains the following questions:
+      | question                | page |
+      | Random from source bank | 1    |
+    And I log in as "admin"
+    When I import "Source course" course into "Target course" course using this options:
+    Then quiz "Source quiz" in course "CQBC2" uses random questions copied from course "CQBC1"
