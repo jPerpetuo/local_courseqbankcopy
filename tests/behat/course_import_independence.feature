@@ -8,9 +8,10 @@ Feature: Import a course with an independent question bank
     Given the following config values are set as admin:
       | enableasyncbackup | 0 |
     And the following "courses" exist:
-      | fullname      | shortname | category |
-      | Source course | CQBC1     | 0        |
-      | Target course | CQBC2     | 0        |
+      | fullname            | shortname | category |
+      | Source course       | CQBC1     | 0        |
+      | Intermediate course | CQBCMID   | 0        |
+      | Target course       | CQBC2     | 0        |
     And the following "question categories" exist:
       | contextlevel | reference | name                  |
       | Course       | CQBC1     | Source question bank  |
@@ -44,3 +45,14 @@ Feature: Import a course with an independent question bank
     And I log in as "admin"
     When I import "Source course" course into "Target course" course using this options:
     Then quiz "Source quiz" in course "CQBC2" uses random questions copied from course "CQBC1"
+
+  @javascript
+  Scenario: Import repoints random questions from a bank copied by a previous import
+    Given I log in as "admin"
+    When I import "Source course" course into "Intermediate course" course using this options:
+    And the following "activities" exist:
+      | activity | name       | course  | idnumber  |
+      | quiz     | Chain quiz | CQBCMID | chainquiz |
+    And quiz "Chain quiz" in course "CQBCMID" has a random question from category "Source question bank"
+    And I import "Intermediate course" course into "Target course" course using this options:
+    Then quiz "Chain quiz" in course "CQBC2" uses random questions copied from course "CQBCMID"
