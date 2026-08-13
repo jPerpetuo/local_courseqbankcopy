@@ -308,7 +308,7 @@ final class diagnostic_report {
     /**
      * Reads category IDs from current and legacy random-filter structures.
      *
-     * @param array<string, mixed> $condition Filter condition.
+     * @param array $condition Filter condition.
      * @return int[]
      */
     private function get_category_ids(array $condition): array {

@@ -100,20 +100,20 @@ final class diagnostic_report_test extends advanced_testcase {
 
         $report = (new diagnostic_report())->build($targetcourse->id);
 
-        $this->assertSame($targetcourse->id, $report['course']['id']);
+        $this->assertSame((int) $targetcourse->id, $report['course']['id']);
         $this->assertSame(1, $report['summary']['operations']);
         $this->assertGreaterThanOrEqual(1, $report['summary']['questionbanks']);
         $this->assertGreaterThanOrEqual(1, $report['summary']['categories']);
         $this->assertSame(2, $report['summary']['randomreferences']);
         $this->assertSame(1, $report['summary']['externalrandomreferences']);
         $this->assertSame('complete', $report['operations'][0]['status']);
-        $this->assertSame($targetcategory->id, $report['operations'][0]['mappings'][0]['newid']);
+        $this->assertSame((int) $targetcategory->id, $report['operations'][0]['mappings'][0]['newid']);
 
         $references = array_column($report['randomreferences'], null, 'slotid');
         $this->assertSame('independent', $references[1]['status']);
-        $this->assertSame($targetcourse->id, $references[1]['questionscontext']['ownercourseid']);
+        $this->assertSame((int) $targetcourse->id, $references[1]['questionscontext']['ownercourseid']);
         $this->assertSame('external', $references[2]['status']);
-        $this->assertSame($sourcecourse->id, $references[2]['questionscontext']['ownercourseid']);
+        $this->assertSame((int) $sourcecourse->id, $references[2]['questionscontext']['ownercourseid']);
     }
 
     /**
