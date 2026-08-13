@@ -630,6 +630,9 @@ final class reference_reconciler {
             if (!is_array($condition)) {
                 continue;
             }
+            $condition = \core_question\question_reference_manager::convert_legacy_set_reference_filter_condition(
+                $condition,
+            );
 
             $oldcategoryid = $this->get_filter_category_id($condition);
             if (!$oldcategoryid) {

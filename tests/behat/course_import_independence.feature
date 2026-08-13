@@ -36,3 +36,11 @@ Feature: Import a course with an independent question bank
     And I log in as "admin"
     When I import "Source course" course into "Target course" course using this options:
     Then quiz "Source quiz" in course "CQBC2" uses random questions copied from course "CQBC1"
+
+  @javascript
+  Scenario: Import repoints random questions stored in the legacy filter format
+    Given quiz "Source quiz" in course "CQBC1" has a random question from category "Source question bank"
+    And random questions in quiz "Source quiz" in course "CQBC1" use the legacy filter format
+    And I log in as "admin"
+    When I import "Source course" course into "Target course" course using this options:
+    Then quiz "Source quiz" in course "CQBC2" uses random questions copied from course "CQBC1"

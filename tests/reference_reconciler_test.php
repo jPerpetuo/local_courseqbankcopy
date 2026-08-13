@@ -226,13 +226,31 @@ final class reference_reconciler_test extends advanced_testcase {
                 'cat' => $sourcecategory->id . ',' . $sourcecategory->contextid,
             ], JSON_THROW_ON_ERROR),
         ]);
+        $legacyreferenceid = $DB->insert_record('question_set_references', (object) [
+            'usingcontextid' => $quizcontext->id,
+            'component' => 'mod_quiz',
+            'questionarea' => 'slot',
+            'itemid' => 2,
+            'questionscontextid' => $sourcecategory->contextid,
+            'filtercondition' => json_encode([
+                'questioncategoryid' => $sourcecategory->id,
+                'includingsubcategories' => true,
+            ], JSON_THROW_ON_ERROR),
+        ]);
 
         $result = (new reference_reconciler())->reconcile($restoreid);
         $reference = $DB->get_record('question_set_references', ['id' => $referenceid], '*', MUST_EXIST);
         $condition = json_decode($reference->filtercondition, true, 512, JSON_THROW_ON_ERROR);
+        $legacyreference = $DB->get_record(
+            'question_set_references',
+            ['id' => $legacyreferenceid],
+            '*',
+            MUST_EXIST,
+        );
+        $legacycondition = json_decode($legacyreference->filtercondition, true, 512, JSON_THROW_ON_ERROR);
         $operation = operation_repository::get($restoreid);
 
-        $this->assertSame(['fixed' => 0, 'random' => 1], $result);
+        $this->assertSame(['fixed' => 0, 'random' => 2], $result);
         $this->assertEquals($targetcategory->contextid, $reference->questionscontextid);
         $this->assertEquals($targetcategory->id, $condition['filter']['category']['values'][0]);
         $this->assertSame(
@@ -240,6 +258,15 @@ final class reference_reconciler_test extends advanced_testcase {
             $condition['cat'],
         );
         $this->assertNotEquals($sourcecategory->contextid, $reference->questionscontextid);
+        $this->assertEquals($targetcategory->contextid, $legacyreference->questionscontextid);
+        $this->assertEquals($targetcategory->id, $legacycondition['filter']['category']['values'][0]);
+        $this->assertTrue($legacycondition['filter']['category']['filteroptions']['includesubcategories']);
+        $this->assertSame(
+            $targetcategory->id . ',' . $targetcategory->contextid,
+            $legacycondition['cat'],
+        );
+        $this->assertArrayNotHasKey('questioncategoryid', $legacycondition);
+        $this->assertArrayNotHasKey('includingsubcategories', $legacycondition);
         $topmapping = $DB->get_record('local_courseqbankcopy_map', [
             'restoreid' => $restoreid,
             'itemtype' => operation_repository::TYPE_CATEGORY,

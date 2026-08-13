@@ -84,6 +84,37 @@ final class behat_local_courseqbankcopy extends behat_base {
     }
 
     /**
+     * Rewrites a quiz's random references using Moodle's pre-4.3 filter structure.
+     *
+     * @Given /^random questions in quiz "([^"]*)" in course "([^"]*)" use the legacy filter format$/
+     * @param string $quizname Quiz name.
+     * @param string $courseshortname Course short name.
+     */
+    public function random_questions_should_use_legacy_filter_format(
+        string $quizname,
+        string $courseshortname
+    ): void {
+        global $DB;
+
+        $course = $DB->get_record('course', ['shortname' => $courseshortname], '*', MUST_EXIST);
+        $references = $this->get_quiz_question_set_references($course, $quizname);
+        foreach ($references as $reference) {
+            $condition = json_decode($reference->filtercondition, true, 512, JSON_THROW_ON_ERROR);
+            $categoryid = (int) ($condition['filter']['category']['values'][0] ?? 0);
+            if (!$categoryid) {
+                continue;
+            }
+            $includesubcategories = (bool) (
+                $condition['filter']['category']['filteroptions']['includesubcategories'] ?? false
+            );
+            $DB->set_field('question_set_references', 'filtercondition', json_encode([
+                'questioncategoryid' => $categoryid,
+                'includingsubcategories' => $includesubcategories,
+            ], JSON_THROW_ON_ERROR), ['id' => $reference->id]);
+        }
+    }
+
+    /**
      * Confirms that an imported quiz and the complete bank are independent from the source course.
      *
      * @Then /^course "([^"]*)" has an independent bank copied from "([^"]*)" for quiz "([^"]*)"$/
@@ -352,6 +383,9 @@ final class behat_local_courseqbankcopy extends behat_base {
         $categoryids = [];
         foreach ($condition['filter']['category']['values'] ?? [] as $categoryid) {
             $categoryids[] = (int) $categoryid;
+        }
+        if (!empty($condition['questioncategoryid'])) {
+            $categoryids[] = (int) $condition['questioncategoryid'];
         }
         if (!empty($condition['cat'])) {
             $categoryids[] = (int) explode(',', (string) $condition['cat'])[0];
