@@ -61,8 +61,8 @@ Feature: Import a course with an independent question bank
   @javascript
   Scenario: Import repoints five random questions added through the shared-bank interface
     Given the following "activities" exist:
-      | activity | name          | course | idnumber     |
-      | qbank    | Imported bank | CQBC0  | importedbank |
+      | activity | name          | course | idnumber     | type   |
+      | qbank    | Imported bank | CQBC0  | importedbank | system |
     And the following "question categories" exist:
       | contextlevel    | reference    | name              |
       | Activity module | importedbank | Imported category |
