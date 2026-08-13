@@ -9,6 +9,7 @@ Feature: Import a course with an independent question bank
       | enableasyncbackup | 0 |
     And the following "courses" exist:
       | fullname            | shortname | category |
+      | Original bank course | CQBC0     | 0        |
       | Source course       | CQBC1     | 0        |
       | Intermediate course | CQBCMID   | 0        |
       | Target course       | CQBC2     | 0        |
@@ -56,3 +57,34 @@ Feature: Import a course with an independent question bank
     And quiz "Chain quiz" in course "CQBCMID" has a random question from category "Source question bank"
     And I import "Intermediate course" course into "Target course" course using this options:
     Then quiz "Chain quiz" in course "CQBC2" uses random questions copied from course "CQBCMID"
+
+  @javascript
+  Scenario: Import repoints five random questions added through the shared-bank interface
+    Given the following "activities" exist:
+      | activity | name          | course | idnumber     |
+      | qbank    | Imported bank | CQBC0  | importedbank |
+    And the following "question categories" exist:
+      | contextlevel    | reference    | name              |
+      | Activity module | importedbank | Imported category |
+    And the following "questions" exist:
+      | questioncategory  | qtype     | name       | template |
+      | Imported category | truefalse | Imported 1 | true     |
+      | Imported category | truefalse | Imported 2 | true     |
+      | Imported category | truefalse | Imported 3 | true     |
+      | Imported category | truefalse | Imported 4 | true     |
+      | Imported category | truefalse | Imported 5 | true     |
+    And I log in as "admin"
+    And I import "Original bank course" course into "Intermediate course" course using this options:
+    And the following "activities" exist:
+      | activity | name           | course  | idnumber   |
+      | quiz     | Five random quiz | CQBCMID | randomquiz |
+    And I am on the "Five random quiz" "mod_quiz > Edit" page
+    And I open the "last" add to quiz menu
+    And I follow "a random question"
+    And I click on "Switch bank" "button"
+    And I click on "Imported bank" "link" in the "Select question bank" "dialogue"
+    And I apply question bank filter "Category" with value "Imported category"
+    And I select "5" from the "randomcount" singleselect
+    And I press "Add random question"
+    When I import "Intermediate course" course into "Target course" course using this options:
+    Then quiz "Five random quiz" in course "CQBC2" uses random questions copied from course "CQBCMID"
