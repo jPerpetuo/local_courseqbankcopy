@@ -42,4 +42,11 @@ if ($hassiteconfig) {
         get_string('allowreuseselection_desc', 'local_courseqbankcopy'),
         0,
     ));
+
+    $ADMIN->add('localplugins', new admin_externalpage(
+        'local_courseqbankcopy_diagnostics',
+        get_string('diagnosticstitle', 'local_courseqbankcopy'),
+        new moodle_url('/local/courseqbankcopy/diagnostics.php'),
+        'moodle/site:config',
+    ));
 }

@@ -56,6 +56,21 @@ php admin/cli/purge_caches.php
 
 Se o patch experimental anterior estiver aplicado, restaure os arquivos oficiais do núcleo antes dos testes desta versão.
 
+## Diagnóstico administrativo
+
+Administradores podem abrir
+`Administração do site > Plugins > Plugins locais > Diagnóstico da cópia de bancos de questões`
+e informar o ID de um curso de destino. O relatório é somente de leitura e mostra:
+
+- operações de cópia e mapeamentos registrados pelo plugin;
+- bancos e categorias de questões encontrados no curso;
+- referências de questões aleatórias dos questionários;
+- o curso proprietário do contexto de cada referência;
+- tarefas pendentes de migração do banco de questões.
+
+Uma referência marcada como **Externa** ainda aponta para um contexto ou uma categoria fora do curso analisado.
+O relatório técnico em JSON pode ser copiado para análise, mas deve ser compartilhado apenas com a equipe responsável.
+
 ## Licença
 
 Este plugin é distribuído sob a GNU General Public License v3 ou posterior.
