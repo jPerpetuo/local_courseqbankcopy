@@ -451,4 +451,30 @@ final class reference_reconciler_test extends advanced_testcase {
         $this->assertNotNull($operation);
         $this->assertSame(operation_repository::STATUS_FAILED, $operation->status);
     }
+
+    /**
+     * An import without source question banks may complete without mappings.
+     */
+    public function test_reconcile_allows_empty_mappings_without_question_banks(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $generator = $this->getDataGenerator();
+        $sourcecourse = $generator->create_course();
+        $targetcourse = $generator->create_course();
+        $restoreid = str_repeat('k', 32);
+        operation_repository::create(
+            $restoreid,
+            $sourcecourse->id,
+            $targetcourse->id,
+            str_repeat('l', 32),
+        );
+
+        $result = (new reference_reconciler())->reconcile($restoreid);
+        $operation = operation_repository::get($restoreid);
+
+        $this->assertSame(['fixed' => 0, 'random' => 0], $result);
+        $this->assertNotNull($operation);
+        $this->assertSame(operation_repository::STATUS_COMPLETE, $operation->status);
+    }
 }
