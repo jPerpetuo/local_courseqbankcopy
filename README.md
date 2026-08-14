@@ -14,6 +14,7 @@ Plugin local para tornar independentes os bancos de questões copiados por
 - No modo de cópia, todos os módulos `qbank` do curso de origem precisam fazer parte da importação.
 - Questões fixas e perguntas aleatórias dos questionários importados são redirecionadas para o banco copiado.
 - A operação termina com uma validação que procura referências remanescentes ao banco de origem.
+- Uma operação com bancos de origem e nenhum mapeamento persistente falha explicitamente, em vez de registrar um falso sucesso.
 
 ## Arquitetura
 
