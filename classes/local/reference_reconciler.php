@@ -52,6 +52,12 @@ final class reference_reconciler {
         $modulemappings = operation_repository::get_mappings($restoreid, operation_repository::TYPE_MODULE);
         $qbemappings = operation_repository::get_mappings($restoreid, operation_repository::TYPE_QBE);
         $categorymappings = operation_repository::get_mappings($restoreid, operation_repository::TYPE_CATEGORY);
+        $this->assert_copy_mappings_exist(
+            $operation,
+            $modulemappings,
+            $qbemappings,
+            $categorymappings,
+        );
         $usingcontextids = $this->get_imported_context_ids($modulemappings);
 
         if (!$usingcontextids) {
@@ -67,6 +73,60 @@ final class reference_reconciler {
 
         operation_repository::set_status($restoreid, operation_repository::STATUS_COMPLETE);
         return ['fixed' => $fixedcount, 'random' => $randomcount];
+    }
+
+    /**
+     * Rejects a question-bank copy operation that produced no persistent mapping.
+     *
+     * An import without question banks may legitimately have no mappings. When
+     * the source course owns a qbank module, however, the backup contract requires
+     * that module to be imported and at least one mapping must survive the restore.
+     *
+     * @param \stdClass $operation Operation record.
+     * @param \stdClass[] $modulemappings Module mappings.
+     * @param \stdClass[] $qbemappings Question-bank entry mappings.
+     * @param \stdClass[] $categorymappings Category mappings.
+     */
+    private function assert_copy_mappings_exist(
+        \stdClass $operation,
+        array $modulemappings,
+        array $qbemappings,
+        array $categorymappings,
+    ): void {
+        global $DB;
+
+        if ($modulemappings || $qbemappings || $categorymappings) {
+            return;
+        }
+
+        $sourcehasqbank = $DB->record_exists_sql(
+            "SELECT 1
+               FROM {course_modules} cm
+               JOIN {modules} md ON md.id = cm.module
+              WHERE cm.course = :courseid
+                AND cm.deletioninprogress = 0
+                AND md.name = :modulename",
+            [
+                'courseid' => $operation->sourcecourseid,
+                'modulename' => 'qbank',
+            ],
+        );
+        if (!$sourcehasqbank) {
+            return;
+        }
+
+        $exception = new \moodle_exception(
+            'questionbankmappingmissing',
+            'local_courseqbankcopy',
+            '',
+            $operation->sourcecourseid,
+        );
+        operation_repository::set_status(
+            $operation->restoreid,
+            operation_repository::STATUS_FAILED,
+            $exception->getMessage(),
+        );
+        throw $exception;
     }
 
     /**

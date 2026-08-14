@@ -69,6 +69,7 @@ $string['modecopy'] = 'Copy question banks to this course';
 $string['modereuse'] = 'Reuse existing question banks';
 $string['pluginname'] = 'Independent question bank copy';
 $string['privacy:metadata'] = 'The Independent question bank copy plugin does not store personal data.';
+$string['questionbankmappingmissing'] = 'The source course {$a} contains question banks, but the import did not record any destination mapping.';
 $string['randomreferencevalidationfailed'] = 'A random-question reference still points to a category or context from the source course.';
 $string['targetcourseidentificationfailed'] = 'local_courseqbankcopy: The target course could not be identified safely.';
 $string['taskcleanupoperations'] = 'Clean up old question-bank copy operation records';

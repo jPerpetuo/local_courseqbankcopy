@@ -69,6 +69,7 @@ $string['modecopy'] = 'Copiar bancos de questões para este curso';
 $string['modereuse'] = 'Reutilizar bancos de questões existentes';
 $string['pluginname'] = 'Cópia independente de bancos de questões';
 $string['privacy:metadata'] = 'O plugin Cópia independente de bancos de questões não armazena dados pessoais.';
+$string['questionbankmappingmissing'] = 'O curso de origem {$a} contém bancos de questões, mas a importação não registrou nenhum mapeamento para o destino.';
 $string['randomreferencevalidationfailed'] = 'Ainda existe uma referência de pergunta aleatória para uma categoria ou contexto do curso de origem.';
 $string['targetcourseidentificationfailed'] = 'local_courseqbankcopy: não foi possível identificar com segurança o curso de destino.';
 $string['taskcleanupoperations'] = 'Limpar registros antigos de cópia de bancos de questões';
