@@ -414,4 +414,41 @@ final class reference_reconciler_test extends advanced_testcase {
         $this->assertNotNull($operation);
         $this->assertNotSame(operation_repository::STATUS_COMPLETE, $operation->status);
     }
+
+    /**
+     * Reconciliation fails closed when a source question bank has no destination mapping.
+     */
+    public function test_reconcile_rejects_missing_question_bank_mapping(): void {
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $generator = $this->getDataGenerator();
+        $sourcecourse = $generator->create_course();
+        $targetcourse = $generator->create_course();
+
+        /** @var \core_question_generator $questiongenerator */
+        $questiongenerator = $generator->get_plugin_generator('core_question');
+        $questiongenerator->create_question_category([
+            'contextid' => context_course::instance($sourcecourse->id)->id,
+        ]);
+
+        $restoreid = str_repeat('i', 32);
+        operation_repository::create(
+            $restoreid,
+            $sourcecourse->id,
+            $targetcourse->id,
+            str_repeat('j', 32),
+        );
+
+        try {
+            (new reference_reconciler())->reconcile($restoreid);
+            $this->fail('A missing destination question-bank mapping should fail reconciliation.');
+        } catch (\moodle_exception $exception) {
+            $this->assertSame('questionbankmappingmissing', $exception->errorcode);
+        }
+
+        $operation = operation_repository::get($restoreid);
+        $this->assertNotNull($operation);
+        $this->assertSame(operation_repository::STATUS_FAILED, $operation->status);
+    }
 }
