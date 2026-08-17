@@ -224,6 +224,8 @@ final class reference_reconciler_test extends advanced_testcase {
                     'category' => ['values' => [$sourcecategory->id]],
                 ],
                 'cat' => $sourcecategory->id . ',' . $sourcecategory->contextid,
+                'courseid' => $sourcecourse->id,
+                'cmid' => $sourcebankcm->id,
             ], JSON_THROW_ON_ERROR),
         ]);
         $legacyreferenceid = $DB->insert_record('question_set_references', (object) [
@@ -257,6 +259,8 @@ final class reference_reconciler_test extends advanced_testcase {
             $targetcategory->id . ',' . $targetcategory->contextid,
             $condition['cat'],
         );
+        $this->assertEquals($targetcourse->id, $condition['courseid']);
+        $this->assertEquals($targetbankcm->id, $condition['cmid']);
         $this->assertNotEquals($sourcecategory->contextid, $reference->questionscontextid);
         $this->assertEquals($targetcategory->contextid, $legacyreference->questionscontextid);
         $this->assertEquals($targetcategory->id, $legacycondition['filter']['category']['values'][0]);
@@ -267,6 +271,8 @@ final class reference_reconciler_test extends advanced_testcase {
         );
         $this->assertArrayNotHasKey('questioncategoryid', $legacycondition);
         $this->assertArrayNotHasKey('includingsubcategories', $legacycondition);
+        $this->assertArrayNotHasKey('courseid', $legacycondition);
+        $this->assertArrayNotHasKey('cmid', $legacycondition);
         $topmapping = $DB->get_record('local_courseqbankcopy_map', [
             'restoreid' => $restoreid,
             'itemtype' => operation_repository::TYPE_CATEGORY,

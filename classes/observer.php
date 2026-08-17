@@ -61,7 +61,11 @@ final class observer {
             return;
         }
 
-        $requestedmode = optional_param('local_courseqbankcopy_mode', import_mode::COPY, PARAM_ALPHA);
+        $requestedmode = optional_param(
+            'local_courseqbankcopy_mode',
+            import_mode::get_default(),
+            PARAM_ALPHA,
+        );
         if (import_mode::resolve($requestedmode, $targetcontext) !== import_mode::COPY) {
             return;
         }

@@ -36,6 +36,40 @@ use PHPUnit\Framework\Attributes\CoversClass;
 #[CoversClass(diagnostic_report::class)]
 final class diagnostic_report_test extends advanced_testcase {
     /**
+     * The report separates user-facing questions, internal children, and versions.
+     */
+    public function test_build_reports_question_statistics(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        /** @var \core_question_generator $questiongenerator */
+        $questiongenerator = $this->getDataGenerator()->get_plugin_generator('core_question');
+        [, $course, , $questions] = $questiongenerator->setup_course_and_questions();
+        $childquestion = $questiongenerator->create_question('shortanswer', null, [
+            'category' => $questions[0]->category,
+        ]);
+        $DB->set_field('question', 'parent', $questions[0]->id, ['id' => $childquestion->id]);
+        $questiongenerator->update_question($questions[1], null, [
+            'name' => 'Second version',
+        ]);
+
+        $report = (new diagnostic_report())->build($course->id);
+
+        $expected = [
+            'mainquestions' => 2,
+            'internalsubquestions' => 1,
+            'internalquestionentries' => 3,
+            'questionversions' => 4,
+        ];
+        $this->assertSame($expected, $report['questionstatistics']);
+        foreach ($expected as $name => $value) {
+            $this->assertSame($value, $report['summary'][$name]);
+        }
+    }
+
+    /**
      * The report distinguishes internal and external random references.
      */
     public function test_build_identifies_external_random_references(): void {

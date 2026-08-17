@@ -67,7 +67,11 @@ final class reference_reconciler {
 
         $transaction = $DB->start_delegated_transaction();
         $fixedcount = $this->repoint_fixed_references($usingcontextids, $qbemappings);
-        $randomcount = $this->repoint_random_references($usingcontextids, $categorymappings);
+        $randomcount = $this->repoint_random_references(
+            $usingcontextids,
+            $categorymappings,
+            (int) $operation->targetcourseid,
+        );
         $this->validate_independence($operation, $usingcontextids, $qbemappings, $categorymappings);
         $transaction->allow_commit();
 
@@ -668,9 +672,14 @@ final class reference_reconciler {
      *
      * @param int[] $contextids Imported module context IDs.
      * @param \stdClass[] $categorymappings Category mappings.
+     * @param int $targetcourseid Destination course ID.
      * @return int Number of updated records.
      */
-    private function repoint_random_references(array $contextids, array $categorymappings): int {
+    private function repoint_random_references(
+        array $contextids,
+        array $categorymappings,
+        int $targetcourseid,
+    ): int {
         global $DB;
 
         $categorymap = [];
@@ -685,6 +694,7 @@ final class reference_reconciler {
         [$contextsql, $params] = $DB->get_in_or_equal($contextids, SQL_PARAMS_NAMED, 'ctx');
         $references = $DB->get_records_select('question_set_references', "usingcontextid {$contextsql}", $params);
         $count = 0;
+        $filtermetadatabycontext = [];
         foreach ($references as $reference) {
             $condition = json_decode($reference->filtercondition, true);
             if (!is_array($condition)) {
@@ -704,6 +714,12 @@ final class reference_reconciler {
                 continue;
             }
             $this->set_filter_category($condition, (int) $mapping->newid, (int) $mapping->newparentid);
+            $this->set_filter_context_metadata(
+                $condition,
+                (int) $mapping->newparentid,
+                $targetcourseid,
+                $filtermetadatabycontext,
+            );
             $reference->questionscontextid = (int) $mapping->newparentid;
             $reference->filtercondition = json_encode($condition);
             $DB->update_record('question_set_references', $reference);
@@ -740,6 +756,62 @@ final class reference_reconciler {
             $condition['filter']['category']['values'][0] = $categoryid;
         }
         $condition['cat'] = $categoryid . ',' . $contextid;
+    }
+
+    /**
+     * Updates auxiliary course and question-bank module IDs when present in the filter.
+     *
+     * @param array $condition Filter condition.
+     * @param int $contextid Destination question-bank context ID.
+     * @param int $targetcourseid Destination course ID.
+     * @param array $metadatabycontext Cached metadata indexed by context ID.
+     */
+    private function set_filter_context_metadata(
+        array &$condition,
+        int $contextid,
+        int $targetcourseid,
+        array &$metadatabycontext,
+    ): void {
+        global $DB;
+
+        if (!array_key_exists('courseid', $condition) && !array_key_exists('cmid', $condition)) {
+            return;
+        }
+
+        if (!isset($metadatabycontext[$contextid])) {
+            $context = \context::instance_by_id($contextid, IGNORE_MISSING);
+            if (!$context || $context->contextlevel !== CONTEXT_MODULE) {
+                throw new \moodle_exception('randomreferencevalidationfailed', 'local_courseqbankcopy');
+            }
+
+            $coursemodule = $DB->get_record_sql(
+                "SELECT cm.id, cm.course
+                   FROM {course_modules} cm
+                   JOIN {modules} md ON md.id = cm.module
+                  WHERE cm.id = :cmid
+                    AND cm.course = :courseid
+                    AND md.name = :modulename",
+                [
+                    'cmid' => $context->instanceid,
+                    'courseid' => $targetcourseid,
+                    'modulename' => 'qbank',
+                ],
+            );
+            if (!$coursemodule) {
+                throw new \moodle_exception('randomreferencevalidationfailed', 'local_courseqbankcopy');
+            }
+            $metadatabycontext[$contextid] = [
+                'courseid' => (int) $coursemodule->course,
+                'cmid' => (int) $coursemodule->id,
+            ];
+        }
+
+        if (array_key_exists('courseid', $condition)) {
+            $condition['courseid'] = $metadatabycontext[$contextid]['courseid'];
+        }
+        if (array_key_exists('cmid', $condition)) {
+            $condition['cmid'] = $metadatabycontext[$contextid]['cmid'];
+        }
     }
 
     /**
@@ -799,9 +871,33 @@ final class reference_reconciler {
             "usingcontextid {$contextsql}",
             $contextparams,
         );
+        $validatedfiltercmids = [];
         foreach ($setreferences as $reference) {
             $condition = json_decode($reference->filtercondition, true);
             $categoryid = is_array($condition) ? $this->get_filter_category_id($condition) : 0;
+            $filtercoursevalid = !is_array($condition)
+                || !array_key_exists('courseid', $condition)
+                || (int) $condition['courseid'] === (int) $operation->targetcourseid;
+            $filtercmvalid = true;
+            if (is_array($condition) && array_key_exists('cmid', $condition)) {
+                $filtercmid = (int) $condition['cmid'];
+                if (!array_key_exists($filtercmid, $validatedfiltercmids)) {
+                    $validatedfiltercmids[$filtercmid] = $DB->record_exists_sql(
+                        "SELECT 1
+                           FROM {course_modules} cm
+                           JOIN {modules} md ON md.id = cm.module
+                          WHERE cm.id = :cmid
+                            AND cm.course = :courseid
+                            AND md.name = :modulename",
+                        [
+                            'cmid' => $filtercmid,
+                            'courseid' => $operation->targetcourseid,
+                            'modulename' => 'qbank',
+                        ],
+                    );
+                }
+                $filtercmvalid = $validatedfiltercmids[$filtercmid];
+            }
             $questionscontext = \context::instance_by_id((int) $reference->questionscontextid, IGNORE_MISSING);
             $categorycontextid = $categoryid
                 ? $DB->get_field('question_categories', 'contextid', ['id' => $categoryid])
@@ -814,6 +910,8 @@ final class reference_reconciler {
                     || !$coursecontext->is_parent_of($questionscontext, true)
                     || !$categorycontext
                     || !$coursecontext->is_parent_of($categorycontext, true)
+                    || !$filtercoursevalid
+                    || !$filtercmvalid
                     || in_array((int) $reference->questionscontextid, $sourcecontextids, true)
                     || in_array($categoryid, $sourcecategoryids, true)
             ) {

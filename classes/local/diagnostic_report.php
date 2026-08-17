@@ -45,6 +45,7 @@ final class diagnostic_report {
         $operations = $this->get_operations($courseid);
         $qbanks = $this->get_question_banks($courseid);
         $categories = $this->get_categories($coursecontext);
+        $questionstatistics = $this->get_question_statistics($coursecontext);
         $references = $this->get_random_references($courseid, $coursecontext);
         $migrationtasks = $this->get_migration_tasks();
 
@@ -70,6 +71,10 @@ final class diagnostic_report {
                 'operations' => count($operations),
                 'questionbanks' => count($qbanks),
                 'categories' => count($categories),
+                'mainquestions' => $questionstatistics['mainquestions'],
+                'internalsubquestions' => $questionstatistics['internalsubquestions'],
+                'internalquestionentries' => $questionstatistics['internalquestionentries'],
+                'questionversions' => $questionstatistics['questionversions'],
                 'randomreferences' => count($references),
                 'externalrandomreferences' => count(array_filter(
                     $references,
@@ -80,6 +85,7 @@ final class diagnostic_report {
             'operations' => $operations,
             'questionbanks' => $qbanks,
             'categories' => $categories,
+            'questionstatistics' => $questionstatistics,
             'randomreferences' => $references,
             'migrationtasks' => $migrationtasks,
         ];
@@ -213,6 +219,44 @@ final class diagnostic_report {
             ],
             $records,
         ));
+    }
+
+    /**
+     * Counts user-facing questions separately from internal child questions and versions.
+     *
+     * Question types such as multianswer (Cloze) store one parent question and one
+     * child question for each embedded answer field. The question bank hides those
+     * child records, so diagnostic totals must report them separately.
+     *
+     * @param \context_course $coursecontext Course context.
+     * @return array{mainquestions: int, internalsubquestions: int,
+     *     internalquestionentries: int, questionversions: int}
+     */
+    private function get_question_statistics(\context_course $coursecontext): array {
+        global $DB;
+
+        $pathlike = $DB->sql_like('ctx.path', ':contextpath');
+        $sql = "SELECT COUNT(DISTINCT CASE WHEN q.parent = 0 THEN qbe.id END) AS mainquestions,
+                       COUNT(DISTINCT CASE WHEN q.parent <> 0 THEN qbe.id END) AS internalsubquestions,
+                       COUNT(DISTINCT qbe.id) AS internalquestionentries,
+                       COUNT(DISTINCT qv.id) AS questionversions
+                  FROM {question_categories} qc
+                  JOIN {context} ctx ON ctx.id = qc.contextid
+             LEFT JOIN {question_bank_entries} qbe ON qbe.questioncategoryid = qc.id
+             LEFT JOIN {question_versions} qv ON qv.questionbankentryid = qbe.id
+             LEFT JOIN {question} q ON q.id = qv.questionid
+                 WHERE ctx.id = :coursecontextid OR {$pathlike}";
+        $record = $DB->get_record_sql($sql, [
+            'coursecontextid' => $coursecontext->id,
+            'contextpath' => $coursecontext->path . '/%',
+        ], MUST_EXIST);
+
+        return [
+            'mainquestions' => (int) $record->mainquestions,
+            'internalsubquestions' => (int) $record->internalsubquestions,
+            'internalquestionentries' => (int) $record->internalquestionentries,
+            'questionversions' => (int) $record->questionversions,
+        ];
     }
 
     /**

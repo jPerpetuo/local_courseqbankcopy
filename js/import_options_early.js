@@ -169,7 +169,9 @@
 
         const storageKey = getStorageKey();
         const stored = window.sessionStorage.getItem(storageKey);
-        const mode = config.canchoose && stored === REUSE ? REUSE : COPY;
+        const storedModeIsValid = stored === COPY || stored === REUSE;
+        const defaultMode = config.defaultmode === REUSE ? REUSE : COPY;
+        const mode = config.canchoose && storedModeIsValid ? stored : defaultMode;
 
         setFormMode(importForms, mode);
         if (mode === COPY) {

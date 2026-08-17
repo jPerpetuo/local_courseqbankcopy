@@ -24,6 +24,16 @@
 defined('MOODLE_INTERNAL') || die();
 
 if ($hassiteconfig) {
+    $importsettings = $ADMIN->locate('importgeneralsettings');
+    if ($importsettings instanceof admin_settingpage) {
+        $importsettings->add(new admin_setting_configcheckbox_with_lock(
+            'local_courseqbankcopy/defaultcopymode',
+            get_string('defaultcopymode', 'local_courseqbankcopy'),
+            get_string('defaultcopymode_desc', 'local_courseqbankcopy'),
+            ['value' => 1, 'locked' => 0],
+        ));
+    }
+
     $settings = new admin_settingpage(
         'local_courseqbankcopy',
         get_string('pluginname', 'local_courseqbankcopy'),

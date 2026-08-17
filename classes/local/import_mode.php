@@ -39,7 +39,25 @@ final class import_mode {
      * @return string
      */
     public static function get_default(): string {
-        return self::COPY;
+        $defaultcopymode = get_config('local_courseqbankcopy', 'defaultcopymode');
+
+        return $defaultcopymode === '0' ? self::REUSE : self::COPY;
+    }
+
+    /**
+     * Determines whether the user may override the configured default mode.
+     *
+     * @param \context_course $context Destination course context.
+     * @return bool
+     */
+    public static function can_choose(\context_course $context): bool {
+        if (get_config('local_courseqbankcopy', 'defaultcopymode_locked')) {
+            return false;
+        }
+
+        return is_siteadmin()
+            || (get_config('local_courseqbankcopy', 'allowreuseselection')
+                && has_capability('local/courseqbankcopy:choosereusemode', $context));
     }
 
     /**
@@ -50,14 +68,10 @@ final class import_mode {
      * @return string
      */
     public static function resolve(?string $requestedmode, \context_course $context): string {
-        $canreuse = is_siteadmin()
-            || (get_config('local_courseqbankcopy', 'allowreuseselection')
-                && has_capability('local/courseqbankcopy:choosereusemode', $context));
-
-        if ($requestedmode === self::REUSE && $canreuse) {
-            return self::REUSE;
+        if (self::can_choose($context) && in_array($requestedmode, [self::COPY, self::REUSE], true)) {
+            return $requestedmode;
         }
 
-        return self::COPY;
+        return self::get_default();
     }
 }

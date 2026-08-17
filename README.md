@@ -7,9 +7,11 @@ Plugin local para tornar independentes os bancos de questões copiados por
 
 ## Comportamento
 
-- O modo padrão é **Copiar bancos de questões para este curso**.
-- Professores comuns não podem desativar a cópia.
-- Administradores do site podem desativar a cópia diretamente nas configurações iniciais da importação.
+- O modo padrão é **Incluir cópias independentes dos bancos de questões**.
+- O padrão e seu bloqueio podem ser administrados em
+  `Administração do site > Cursos > Backups > Configurações gerais de importação`.
+- Professores comuns seguem o padrão administrativo e não podem alterá-lo.
+- Administradores do site podem alterar o modo diretamente nas configurações iniciais da importação quando o padrão não estiver bloqueado.
 - Usuários autorizados podem escolher o reaproveitamento quando a configuração administrativa estiver habilitada.
 - No modo de cópia, todos os módulos `qbank` do curso de origem precisam fazer parte da importação.
 - Questões fixas e perguntas aleatórias dos questionários importados são redirecionadas para o banco copiado.

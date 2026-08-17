@@ -24,6 +24,7 @@
 namespace local_courseqbankcopy;
 
 use core\hook\output\before_standard_head_html_generation;
+use local_courseqbankcopy\local\import_mode;
 
 /**
  * Hooks used to integrate with the native Moodle import page.
@@ -46,13 +47,10 @@ final class hook_callbacks {
             return;
         }
 
-        $canchoose = is_siteadmin()
-            || ((bool) get_config('local_courseqbankcopy', 'allowreuseselection')
-                && has_capability('local/courseqbankcopy:choosereusemode', $PAGE->context));
-
         $config = [
-            'canchoose' => $canchoose,
+            'canchoose' => import_mode::can_choose($PAGE->context),
             'copylabel' => get_string('copyquestions', 'local_courseqbankcopy'),
+            'defaultmode' => import_mode::get_default(),
             'modeparameter' => 'local_courseqbankcopy_mode',
         ];
 
@@ -66,7 +64,7 @@ final class hook_callbacks {
         ]));
 
         $scripturl = new \moodle_url('/local/courseqbankcopy/js/import_options_early.js', [
-            'v' => '2026080702',
+            'v' => '2026081401',
         ]);
         $PAGE->requires->js($scripturl, true);
     }
