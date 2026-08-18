@@ -6,13 +6,24 @@ Feature: Import a course with an independent question bank
 
   Background:
     Given the following config values are set as admin:
-      | enableasyncbackup | 0 |
+      | config              | value | plugin                |
+      | enableasyncbackup   | 0     |                       |
+      | defaultcopymode     | 1     | local_courseqbankcopy |
+      | defaultcopymode_locked | 0  | local_courseqbankcopy |
+      | allowreuseselection | 0     | local_courseqbankcopy |
     And the following "courses" exist:
       | fullname            | shortname | category |
       | Original bank course | CQBC0     | 0        |
       | Source course       | CQBC1     | 0        |
       | Intermediate course | CQBCMID   | 0        |
       | Target course       | CQBC2     | 0        |
+    And the following "users" exist:
+      | username | firstname | lastname | email                |
+      | teacher1 | Teacher   | One      | teacher1@example.com |
+    And the following "course enrolments" exist:
+      | user     | course | role           |
+      | teacher1 | CQBC1  | editingteacher |
+      | teacher1 | CQBC2  | editingteacher |
     And the following "question categories" exist:
       | contextlevel | reference | name                  |
       | Course       | CQBC1     | Source question bank  |
@@ -25,6 +36,21 @@ Feature: Import a course with an independent question bank
       | quiz     | Source quiz | CQBC1  | sourcequiz |
     And quiz "Source quiz" contains the following questions:
       | Question in quiz | 1 |
+
+  @javascript
+  Scenario: Only authorised users see the question bank copy mode
+    Given I log in as "admin"
+    When I open the import initial settings from course "Source course" into course "Target course"
+    Then "#local-courseqbankcopy-checkbox" "css_element" should exist
+    And I click on "#local-courseqbankcopy-checkbox" "css_element"
+
+  @javascript
+  Scenario: Teacher imports an independent bank without seeing the mode selector
+    Given I log in as "teacher1"
+    When I open the import initial settings from course "Source course" into course "Target course"
+    Then "#local-courseqbankcopy-checkbox" "css_element" should not exist
+    When I import "Source course" course into "Target course" course using this options:
+    Then course "CQBC2" has an independent bank copied from "CQBC1" for quiz "Source quiz"
 
   @javascript
   Scenario: Import copies the complete bank and repoints the imported quiz

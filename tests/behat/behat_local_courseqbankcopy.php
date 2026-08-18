@@ -30,6 +30,24 @@ require_once(__DIR__ . '/../../../../lib/behat/behat_base.php');
  */
 final class behat_local_courseqbankcopy extends behat_base {
     /**
+     * Opens the initial settings step of a course import.
+     *
+     * @When /^I open the import initial settings from course "([^"]*)" into course "([^"]*)"$/
+     * @param string $fromcourse Source course full name.
+     * @param string $tocourse Target course full name.
+     */
+    public function i_open_import_initial_settings(string $fromcourse, string $tocourse): void {
+        $this->execute('behat_navigation::i_am_on_page_instance', [$tocourse, 'import']);
+
+        $fromcourse = behat_context_helper::escape($fromcourse);
+        $xpath = "//div[contains(concat(' ', normalize-space(@class), ' '), ' ics-results ')]" .
+            "/descendant::tr[contains(., {$fromcourse})]" .
+            "/descendant::input[@type='radio']";
+        $this->execute('behat_forms::i_set_the_field_with_xpath_to', [$xpath, 1]);
+        $this->execute('behat_forms::press_button', get_string('continue'));
+    }
+
+    /**
      * Adds one random question using the quiz structure API shared by Moodle 5.1 and 5.2.
      *
      * @Given /^quiz "([^"]*)" in course "([^"]*)" has a random question from category "([^"]*)"$/

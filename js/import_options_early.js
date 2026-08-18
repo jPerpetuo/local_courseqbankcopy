@@ -95,7 +95,7 @@
      * @param {string} initialMode Initial import mode.
      */
     const addOption = (form, storageKey, initialMode) => {
-        if (document.getElementById('local-courseqbankcopy-option')) {
+        if (!config.canchoose || document.getElementById('local-courseqbankcopy-option')) {
             return;
         }
 
@@ -112,7 +112,6 @@
         checkbox.id = 'local-courseqbankcopy-checkbox';
         checkbox.className = 'form-check-input';
         checkbox.checked = mode === COPY;
-        checkbox.disabled = !config.canchoose;
 
         const label = document.createElement('label');
         label.className = 'form-check-label';

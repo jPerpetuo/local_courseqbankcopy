@@ -64,7 +64,7 @@ final class hook_callbacks {
         ]));
 
         $scripturl = new \moodle_url('/local/courseqbankcopy/js/import_options_early.js', [
-            'v' => '2026081401',
+            'v' => '2026081800',
         ]);
         $PAGE->requires->js($scripturl, true);
     }
