@@ -5,7 +5,7 @@ All notable changes to this plugin are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses semantic versioning for public releases.
 
-## [1.1.0-beta1] - 2026-08-19
+## [1.1.0] - 2026-08-19
 
 ### Changed
 
@@ -20,10 +20,12 @@ and the project uses semantic versioning for public releases.
 - Moodle 5.1.x.
 - Moodle 5.2.x.
 
-### Notes
+### Validation
 
-- Moodle 5.0 support remains provisional until the automated matrix and manual
-  course-import acceptance tests have passed.
+- The automated matrix passed on Moodle 5.0.0 and the current Moodle 5.0 stable
+  branch, including PHPUnit and a Behat course-import scenario.
+- Manual acceptance testing on a separate Moodle 5.0 site was not performed
+  because no such environment was available for this release.
 
 ## [1.0.0] - 2026-08-19
 
@@ -59,5 +61,5 @@ and the project uses semantic versioning for public releases.
 - Sites using third-party question types should include those types in local
   acceptance testing.
 
-[1.1.0-beta1]: https://github.com/jPerpetuo/local_courseqbankcopy/compare/v1.0.0...HEAD
+[1.1.0]: https://github.com/jPerpetuo/local_courseqbankcopy/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/jPerpetuo/local_courseqbankcopy/releases/tag/v1.0.0

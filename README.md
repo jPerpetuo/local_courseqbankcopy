@@ -2,7 +2,7 @@
 
 Moodle component: `local_courseqbankcopy`
 
-Current development release: `1.1.0-beta1`
+Current stable release: `1.1.0`
 
 Independent question bank copy is a local Moodle plugin that changes the native
 `Course > More > Course reuse > Import` workflow so question banks can be copied
