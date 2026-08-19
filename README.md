@@ -45,31 +45,88 @@ institution-wide deployment.
 
 ## Installation
 
+Choose the installation method that matches how your Moodle code is managed.
+Regardless of the method, the final plugin directory must be:
+
+```text
+<$CFG->dirroot>/local/courseqbankcopy
+```
+
+In a standard Moodle 5.0 installation, `$CFG->dirroot` is normally the Moodle
+root directory. In Moodle 5.1 and later, it normally points to the `public`
+directory introduced by Moodle's restructured codebase.
+
+### Install from the Moodle Plugins directory
+
+This method will be available after the plugin has been approved and published
+in the Moodle Plugins directory.
+
+1. Sign in to Moodle as a site administrator.
+2. Open `Site administration > Plugins > Install plugins`.
+3. Select **Install plugins from the Moodle plugins directory**.
+4. Find **Independent question bank copy** and select **Install**.
+5. Review Moodle's validation results and complete the installation.
+
+This method requires the Moodle server to allow web-based plugin installation
+and to have write access to the applicable plugin directory.
+
 ### Install from a ZIP package
 
-1. Download the release ZIP.
+1. Download the packaged ZIP from the desired GitHub release.
 2. Sign in to Moodle as a site administrator.
 3. Open `Site administration > Plugins > Install plugins`.
 4. Upload the ZIP and complete Moodle's validation and installation steps.
-5. Purge all Moodle caches after installation.
 
-The ZIP must contain one top-level directory named `courseqbankcopy`.
+The ZIP must contain exactly one top-level directory named `courseqbankcopy`.
+Use the packaged release asset rather than GitHub's automatically generated
+source archives unless you have verified and, if necessary, corrected the
+top-level directory name.
 
-### Install manually
+### Deploy with Git
 
-Copy the plugin directory to:
+This method is intended for administrators who manage Moodle code through a
+version-controlled deployment process. From the `local` directory inside
+`$CFG->dirroot`, clone the repository into `courseqbankcopy` and check out a
+stable release tag:
 
 ```text
-<moodle-directory>/public/local/courseqbankcopy
+git clone https://github.com/jPerpetuo/local_courseqbankcopy.git courseqbankcopy
+cd courseqbankcopy
+git checkout v1.0.0
 ```
 
-Then open the Moodle administration notifications page, or run the following
-commands from Moodle's public directory:
+For production deployments, use a tagged release instead of the development
+branch. Teams that already manage Moodle with Git may track the plugin as a Git
+submodule, provided the checked-out plugin path remains
+`<$CFG->dirroot>/local/courseqbankcopy`.
+
+### Deploy by copying the files
+
+Download and extract a packaged release, then copy its `courseqbankcopy`
+directory to:
 
 ```text
-php admin/cli/upgrade.php
+<$CFG->dirroot>/local/courseqbankcopy
+```
+
+Do not copy a new release over an existing plugin directory. Replace the old
+plugin code using the same controlled deployment procedure used for Moodle
+core, while preserving the Moodle database and `moodledata` directory.
+
+### Complete the installation or upgrade
+
+After deploying the plugin code by ZIP, Git, or file copy, open
+`Site administration > Notifications` and follow the prompts. Administrators
+who use the command line can instead run:
+
+```text
+cd /path/to/cfg-dirroot
+php admin/cli/upgrade.php --non-interactive
 php admin/cli/purge_caches.php
 ```
+
+Replace `/path/to/cfg-dirroot` with the actual value configured as
+`$CFG->dirroot` on the target site.
 
 If an experimental core patch was previously used to change course import or
 restore behaviour, restore the official Moodle core files before enabling this
