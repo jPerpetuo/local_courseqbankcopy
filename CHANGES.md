@@ -5,6 +5,26 @@ All notable changes to this plugin are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project uses semantic versioning for public releases.
 
+## [1.1.0-beta1] - 2026-08-19
+
+### Changed
+
+- Expanded the declared compatibility range to Moodle 5.0 through 5.2.
+- Added automated coverage for the initial Moodle 5.0 release and the current
+  Moodle 5.0 stable branch.
+- Added MariaDB 10.11 to the automated database matrix.
+
+### Compatibility
+
+- Moodle 5.0.x.
+- Moodle 5.1.x.
+- Moodle 5.2.x.
+
+### Notes
+
+- Moodle 5.0 support remains provisional until the automated matrix and manual
+  course-import acceptance tests have passed.
+
 ## [1.0.0] - 2026-08-19
 
 ### Added
@@ -39,4 +59,5 @@ and the project uses semantic versioning for public releases.
 - Sites using third-party question types should include those types in local
   acceptance testing.
 
+[1.1.0-beta1]: https://github.com/jPerpetuo/local_courseqbankcopy/compare/v1.0.0...HEAD
 [1.0.0]: https://github.com/jPerpetuo/local_courseqbankcopy/releases/tag/v1.0.0

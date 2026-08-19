@@ -7,6 +7,14 @@
 - Executar o cron ao menos uma vez para confirmar o registro da tarefa agendada.
 - Ativar mensagens de depuração em ambiente de desenvolvimento.
 
+## Matriz de compatibilidade
+
+- Moodle 5.0.0 com PHP 8.2 e MySQL 8.4.
+- Moodle 5.0 estável atual com PHP 8.4 e MariaDB 10.11.
+- Moodle 5.1 e 5.2 nas combinações mantidas pelo GitHub Actions.
+- Executar o cenário básico completo manualmente em pelo menos um ambiente
+  Moodle 5.0 atualizado antes de publicar a compatibilidade como estável.
+
 ## Cenário básico
 
 1. Criar o curso X com um banco, categorias, subcategorias e questões.
