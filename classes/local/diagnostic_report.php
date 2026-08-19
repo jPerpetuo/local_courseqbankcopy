@@ -309,7 +309,7 @@ final class diagnostic_report {
     /**
      * Returns fixed-question references from every quiz in the target course.
      *
-     * @param array<int, \stdClass> $quizbycontext Quizzes indexed by module context ID.
+     * @param array $quizbycontext Quizzes indexed by module context ID.
      * @param \context_course $coursecontext Course context.
      * @return array<int, array<string, mixed>>
      */
@@ -349,7 +349,7 @@ final class diagnostic_report {
             $qbeexists = isset($record->qbeid);
             if (!$qbeexists || !$categoryexists || !$questionscontext['exists']) {
                 $status = 'invalid';
-            } elseif (!$questionscontext['insidetargetcourse']) {
+            } else if (!$questionscontext['insidetargetcourse']) {
                 $status = 'external';
             } else {
                 $status = 'independent';
@@ -390,7 +390,7 @@ final class diagnostic_report {
     /**
      * Returns random references from every quiz in the target course.
      *
-     * @param array<int, \stdClass> $quizbycontext Quizzes indexed by module context ID.
+     * @param array $quizbycontext Quizzes indexed by module context ID.
      * @param \context_course $coursecontext Course context.
      * @return array<int, array<string, mixed>>
      */
@@ -450,7 +450,7 @@ final class diagnostic_report {
             }
             if (!$questionscontext['exists'] || !$categoriesvalid) {
                 $status = 'invalid';
-            } elseif (!$questionscontext['insidetargetcourse'] || !$categoriesinside) {
+            } else if (!$questionscontext['insidetargetcourse'] || !$categoriesinside) {
                 $status = 'external';
             } else {
                 $status = 'independent';
@@ -481,7 +481,7 @@ final class diagnostic_report {
     /**
      * Counts references with one diagnostic status.
      *
-     * @param array<int, array<string, mixed>> $references References to count.
+     * @param array $references References to count.
      * @param string $status Diagnostic status.
      * @return int
      */
@@ -526,7 +526,7 @@ final class diagnostic_report {
         if (isset($this->contextcache[$cachekey])) {
             return $this->contextcache[$cachekey];
         }
-        $context = \context::instance_by_id($contextid, IGNORE_MISSING);
+        $context = $contextid > 0 ? \context::instance_by_id($contextid, IGNORE_MISSING) : false;
         if (!$context) {
             return $this->contextcache[$cachekey] = [
                 'exists' => false,

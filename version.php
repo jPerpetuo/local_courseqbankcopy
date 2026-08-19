@@ -24,7 +24,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_courseqbankcopy';
-$plugin->version = 2026081802;
+$plugin->version = 2026081900;
 $plugin->requires = 2025100601;
 $plugin->supported = [501, 502];
 $plugin->maturity = MATURITY_STABLE;
