@@ -46,8 +46,15 @@ final class diagnostic_report {
         $qbanks = $this->get_question_banks($courseid);
         $categories = $this->get_categories($coursecontext);
         $questionstatistics = $this->get_question_statistics($coursecontext);
-        $references = $this->get_random_references($courseid, $coursecontext);
+        $quizzes = $this->get_quizzes_by_context($courseid);
+        $fixedreferences = $this->get_fixed_references($quizzes, $coursecontext);
+        $randomreferences = $this->get_random_references($quizzes, $coursecontext);
         $migrationtasks = $this->get_migration_tasks();
+
+        $externalfixedreferences = $this->count_references_by_status($fixedreferences, 'external');
+        $invalidfixedreferences = $this->count_references_by_status($fixedreferences, 'invalid');
+        $externalrandomreferences = $this->count_references_by_status($randomreferences, 'external');
+        $invalidrandomreferences = $this->count_references_by_status($randomreferences, 'invalid');
 
         return [
             'generatedat' => time(),
@@ -75,18 +82,30 @@ final class diagnostic_report {
                 'internalsubquestions' => $questionstatistics['internalsubquestions'],
                 'internalquestionentries' => $questionstatistics['internalquestionentries'],
                 'questionversions' => $questionstatistics['questionversions'],
-                'randomreferences' => count($references),
-                'externalrandomreferences' => count(array_filter(
-                    $references,
-                    static fn(array $reference): bool => $reference['status'] !== 'independent',
-                )),
+                'fixedreferences' => count($fixedreferences),
+                'independentfixedreferences' => $this->count_references_by_status(
+                    $fixedreferences,
+                    'independent',
+                ),
+                'externalfixedreferences' => $externalfixedreferences,
+                'invalidfixedreferences' => $invalidfixedreferences,
+                'randomreferences' => count($randomreferences),
+                'independentrandomreferences' => $this->count_references_by_status(
+                    $randomreferences,
+                    'independent',
+                ),
+                'externalrandomreferences' => $externalrandomreferences,
+                'invalidrandomreferences' => $invalidrandomreferences,
+                'nonindependentreferences' => $externalfixedreferences + $invalidfixedreferences
+                    + $externalrandomreferences + $invalidrandomreferences,
                 'migrationtasks' => count($migrationtasks),
             ],
             'operations' => $operations,
             'questionbanks' => $qbanks,
             'categories' => $categories,
             'questionstatistics' => $questionstatistics,
-            'randomreferences' => $references,
+            'fixedreferences' => $fixedreferences,
+            'randomreferences' => $randomreferences,
             'migrationtasks' => $migrationtasks,
         ];
     }
@@ -260,13 +279,12 @@ final class diagnostic_report {
     }
 
     /**
-     * Returns random references from every quiz in the target course.
+     * Returns quizzes from the target course indexed by module context ID.
      *
      * @param int $courseid Course ID.
-     * @param \context_course $coursecontext Course context.
-     * @return array<int, array<string, mixed>>
+     * @return array<int, \stdClass>
      */
-    private function get_random_references(int $courseid, \context_course $coursecontext): array {
+    private function get_quizzes_by_context(int $courseid): array {
         global $DB;
 
         $sql = "SELECT ctx.id AS contextid, cm.id AS cmid, q.id AS quizid, q.name
@@ -275,19 +293,114 @@ final class diagnostic_report {
                   JOIN {quiz} q ON q.id = cm.instance
                   JOIN {context} ctx ON ctx.contextlevel = :contextlevel AND ctx.instanceid = cm.id
                  WHERE cm.course = :courseid";
-        $quizzes = $DB->get_records_sql($sql, [
+        $records = $DB->get_records_sql($sql, [
             'modulename' => 'quiz',
             'contextlevel' => CONTEXT_MODULE,
             'courseid' => $courseid,
         ]);
-        if (!$quizzes) {
+
+        $quizbycontext = [];
+        foreach ($records as $quiz) {
+            $quizbycontext[(int) $quiz->contextid] = $quiz;
+        }
+        return $quizbycontext;
+    }
+
+    /**
+     * Returns fixed-question references from every quiz in the target course.
+     *
+     * @param array<int, \stdClass> $quizbycontext Quizzes indexed by module context ID.
+     * @param \context_course $coursecontext Course context.
+     * @return array<int, array<string, mixed>>
+     */
+    private function get_fixed_references(array $quizbycontext, \context_course $coursecontext): array {
+        global $DB;
+
+        if (!$quizbycontext) {
             return [];
         }
 
-        $quizbycontext = [];
-        foreach ($quizzes as $quiz) {
-            $quizbycontext[(int) $quiz->contextid] = $quiz;
+        [$contextsql, $params] = $DB->get_in_or_equal(
+            array_keys($quizbycontext),
+            SQL_PARAMS_NAMED,
+            'fixedcontext',
+        );
+        $params['component'] = 'mod_quiz';
+        $params['questionarea'] = 'slot';
+        $sql = "SELECT qr.id AS referenceid, qr.usingcontextid, qr.itemid,
+                       qr.questionbankentryid, qbe.id AS qbeid,
+                       qc.id AS categoryid, qc.name AS categoryname,
+                       qc.parent AS categoryparent, qc.contextid AS categorycontextid,
+                       qc.stamp AS categorystamp
+                  FROM {question_references} qr
+             LEFT JOIN {question_bank_entries} qbe ON qbe.id = qr.questionbankentryid
+             LEFT JOIN {question_categories} qc ON qc.id = qbe.questioncategoryid
+                 WHERE qr.usingcontextid {$contextsql}
+                       AND qr.component = :component
+                       AND qr.questionarea = :questionarea
+              ORDER BY qr.usingcontextid, qr.itemid, qr.id";
+        $records = $DB->get_records_sql($sql, $params);
+
+        $details = [];
+        foreach ($records as $record) {
+            $contextid = isset($record->categorycontextid) ? (int) $record->categorycontextid : 0;
+            $questionscontext = $this->describe_context($contextid, $coursecontext);
+            $categoryexists = isset($record->categoryid);
+            $qbeexists = isset($record->qbeid);
+            if (!$qbeexists || !$categoryexists || !$questionscontext['exists']) {
+                $status = 'invalid';
+            } elseif (!$questionscontext['insidetargetcourse']) {
+                $status = 'external';
+            } else {
+                $status = 'independent';
+            }
+
+            $categorydetails = $categoryexists ? [[
+                'id' => (int) $record->categoryid,
+                'exists' => true,
+                'name' => $record->categoryname,
+                'parent' => (int) $record->categoryparent,
+                'contextid' => $contextid,
+                'stamp' => $record->categorystamp,
+                'context' => $questionscontext,
+            ]] : [];
+            $quiz = $quizbycontext[(int) $record->usingcontextid];
+            $details[] = [
+                'type' => 'fixed',
+                'referenceid' => (int) $record->referenceid,
+                'quizid' => (int) $quiz->quizid,
+                'quizcmid' => (int) $quiz->cmid,
+                'quizname' => $quiz->name,
+                'slotid' => (int) $record->itemid,
+                'usingcontextid' => (int) $record->usingcontextid,
+                'questionbankentryid' => (int) $record->questionbankentryid,
+                'questionbankentryexists' => $qbeexists,
+                'questionscontextid' => $contextid,
+                'questionscontext' => $questionscontext,
+                'referencecontextid' => $contextid,
+                'referencecontext' => $questionscontext,
+                'categoryids' => $categoryexists ? [(int) $record->categoryid] : [],
+                'categories' => $categorydetails,
+                'status' => $status,
+            ];
         }
+        return $details;
+    }
+
+    /**
+     * Returns random references from every quiz in the target course.
+     *
+     * @param array<int, \stdClass> $quizbycontext Quizzes indexed by module context ID.
+     * @param \context_course $coursecontext Course context.
+     * @return array<int, array<string, mixed>>
+     */
+    private function get_random_references(array $quizbycontext, \context_course $coursecontext): array {
+        global $DB;
+
+        if (!$quizbycontext) {
+            return [];
+        }
+
         $references = $DB->get_records_list(
             'question_set_references',
             'usingcontextid',
@@ -302,6 +415,7 @@ final class diagnostic_report {
             $questionscontext = $this->describe_context((int) $reference->questionscontextid, $coursecontext);
             $categorydetails = [];
             $categoriesinside = true;
+            $categoriesvalid = (bool) $categoryids;
             foreach ($categoryids as $categoryid) {
                 $category = $DB->get_record(
                     'question_categories',
@@ -313,6 +427,7 @@ final class diagnostic_report {
                     : null;
                 $inside = $categorycontext && $categorycontext['insidetargetcourse'];
                 $categoriesinside = $categoriesinside && (bool) $inside;
+                $categoriesvalid = $categoriesvalid && (bool) $category && (bool) ($categorycontext['exists'] ?? false);
                 $categorydetails[] = [
                     'id' => $categoryid,
                     'exists' => (bool) $category,
@@ -323,14 +438,26 @@ final class diagnostic_report {
                     'context' => $categorycontext,
                 ];
             }
-            $status = $questionscontext['exists']
-                && $questionscontext['insidetargetcourse']
-                && $categoryids
-                && $categoriesinside
-                    ? 'independent'
-                    : 'external';
+            $referencecontext = $questionscontext;
+            $referencecontextid = (int) $reference->questionscontextid;
+            foreach ($categorydetails as $categorydetail) {
+                $categorycontext = $categorydetail['context'];
+                if ($categorycontext && (!$categorycontext['exists'] || !$categorycontext['insidetargetcourse'])) {
+                    $referencecontext = $categorycontext;
+                    $referencecontextid = (int) $categorycontext['id'];
+                    break;
+                }
+            }
+            if (!$questionscontext['exists'] || !$categoriesvalid) {
+                $status = 'invalid';
+            } elseif (!$questionscontext['insidetargetcourse'] || !$categoriesinside) {
+                $status = 'external';
+            } else {
+                $status = 'independent';
+            }
             $quiz = $quizbycontext[(int) $reference->usingcontextid];
             $details[] = [
+                'type' => 'random',
                 'referenceid' => (int) $reference->id,
                 'quizid' => (int) $quiz->quizid,
                 'quizcmid' => (int) $quiz->cmid,
@@ -339,6 +466,8 @@ final class diagnostic_report {
                 'usingcontextid' => (int) $reference->usingcontextid,
                 'questionscontextid' => (int) $reference->questionscontextid,
                 'questionscontext' => $questionscontext,
+                'referencecontextid' => $referencecontextid,
+                'referencecontext' => $referencecontext,
                 'categoryids' => $categoryids,
                 'categories' => $categorydetails,
                 'status' => $status,
@@ -347,6 +476,20 @@ final class diagnostic_report {
             ];
         }
         return $details;
+    }
+
+    /**
+     * Counts references with one diagnostic status.
+     *
+     * @param array<int, array<string, mixed>> $references References to count.
+     * @param string $status Diagnostic status.
+     * @return int
+     */
+    private function count_references_by_status(array $references, string $status): int {
+        return count(array_filter(
+            $references,
+            static fn(array $reference): bool => $reference['status'] === $status,
+        ));
     }
 
     /**

@@ -1,0 +1,5 @@
+/\.gitattributes export-ignore
+/lang/pt_br export-ignore
+/.github export-ignore
+/docs/marketplace-language-strategy.md export-ignore
+/docs/screenshots/README.md export-ignore

@@ -131,6 +131,12 @@ final class diagnostic_report_test extends advanced_testcase {
             $sourcecategory->contextid,
             $sourcecategory->id,
         );
+        $this->insert_random_reference(
+            $quizcontext->id,
+            3,
+            $targetcategory->contextid,
+            999999,
+        );
 
         $report = (new diagnostic_report())->build($targetcourse->id);
 
@@ -138,8 +144,10 @@ final class diagnostic_report_test extends advanced_testcase {
         $this->assertSame(1, $report['summary']['operations']);
         $this->assertGreaterThanOrEqual(1, $report['summary']['questionbanks']);
         $this->assertGreaterThanOrEqual(1, $report['summary']['categories']);
-        $this->assertSame(2, $report['summary']['randomreferences']);
+        $this->assertSame(3, $report['summary']['randomreferences']);
+        $this->assertSame(1, $report['summary']['independentrandomreferences']);
         $this->assertSame(1, $report['summary']['externalrandomreferences']);
+        $this->assertSame(1, $report['summary']['invalidrandomreferences']);
         $this->assertSame('complete', $report['operations'][0]['status']);
         $this->assertSame((int) $targetcategory->id, $report['operations'][0]['mappings'][0]['newid']);
 
@@ -148,6 +156,77 @@ final class diagnostic_report_test extends advanced_testcase {
         $this->assertSame((int) $targetcourse->id, $references[1]['questionscontext']['ownercourseid']);
         $this->assertSame('external', $references[2]['status']);
         $this->assertSame((int) $sourcecourse->id, $references[2]['questionscontext']['ownercourseid']);
+        $this->assertSame('invalid', $references[3]['status']);
+    }
+
+    /**
+     * The report distinguishes internal, external, and invalid fixed references.
+     */
+    public function test_build_identifies_fixed_question_references(): void {
+        global $DB;
+
+        $this->resetAfterTest();
+        $this->setAdminUser();
+
+        $generator = $this->getDataGenerator();
+        $sourcecourse = $generator->create_course([
+            'fullname' => 'Fixed source course',
+            'shortname' => 'FIXEDSOURCE',
+        ]);
+        $targetcourse = $generator->create_course([
+            'fullname' => 'Fixed target course',
+            'shortname' => 'FIXEDTARGET',
+        ]);
+        $targetquiz = $generator->create_module('quiz', [
+            'course' => $targetcourse->id,
+            'name' => 'Fixed diagnostic quiz',
+        ]);
+
+        /** @var \core_question_generator $questiongenerator */
+        $questiongenerator = $generator->get_plugin_generator('core_question');
+        $sourcecategory = $questiongenerator->create_question_category([
+            'contextid' => context_course::instance($sourcecourse->id)->id,
+            'name' => 'Fixed source category',
+        ]);
+        $targetcategory = $questiongenerator->create_question_category([
+            'contextid' => context_course::instance($targetcourse->id)->id,
+            'name' => 'Fixed target category',
+        ]);
+        $sourcequestion = $questiongenerator->create_question('truefalse', null, [
+            'category' => $sourcecategory->id,
+        ]);
+        $targetquestion = $questiongenerator->create_question('truefalse', null, [
+            'category' => $targetcategory->id,
+        ]);
+
+        $quizcontext = context_module::instance($targetquiz->cmid);
+        $this->insert_fixed_reference(
+            $quizcontext->id,
+            1,
+            $targetquestion->questionbankentryid,
+        );
+        $this->insert_fixed_reference(
+            $quizcontext->id,
+            2,
+            $sourcequestion->questionbankentryid,
+        );
+        $this->insert_fixed_reference($quizcontext->id, 3, 999999);
+
+        $report = (new diagnostic_report())->build($targetcourse->id);
+
+        $this->assertSame(3, $report['summary']['fixedreferences']);
+        $this->assertSame(1, $report['summary']['independentfixedreferences']);
+        $this->assertSame(1, $report['summary']['externalfixedreferences']);
+        $this->assertSame(1, $report['summary']['invalidfixedreferences']);
+        $this->assertSame(2, $report['summary']['nonindependentreferences']);
+
+        $references = array_column($report['fixedreferences'], null, 'slotid');
+        $this->assertSame('independent', $references[1]['status']);
+        $this->assertSame((int) $targetcourse->id, $references[1]['questionscontext']['ownercourseid']);
+        $this->assertSame('external', $references[2]['status']);
+        $this->assertSame((int) $sourcecourse->id, $references[2]['questionscontext']['ownercourseid']);
+        $this->assertSame('invalid', $references[3]['status']);
+        $this->assertFalse($references[3]['questionbankentryexists']);
     }
 
     /**
@@ -178,6 +257,30 @@ final class diagnostic_report_test extends advanced_testcase {
                 ],
                 'cat' => $categoryid . ',' . $questionscontextid,
             ], JSON_THROW_ON_ERROR),
+        ]);
+    }
+
+    /**
+     * Inserts one fixed-question reference for a quiz slot.
+     *
+     * @param int $usingcontextid Quiz module context ID.
+     * @param int $itemid Quiz slot ID.
+     * @param int $questionbankentryid Question-bank entry ID.
+     */
+    private function insert_fixed_reference(
+        int $usingcontextid,
+        int $itemid,
+        int $questionbankentryid,
+    ): void {
+        global $DB;
+
+        $DB->insert_record('question_references', (object) [
+            'usingcontextid' => $usingcontextid,
+            'component' => 'mod_quiz',
+            'questionarea' => 'slot',
+            'itemid' => $itemid,
+            'questionbankentryid' => $questionbankentryid,
+            'version' => null,
         ]);
     }
 }

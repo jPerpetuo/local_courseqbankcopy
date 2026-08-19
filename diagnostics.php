@@ -69,9 +69,13 @@ echo html_writer::end_tag('form');
 if ($courseid) {
     $report = (new diagnostic_report())->build($courseid);
     $summary = $report['summary'];
-    $alerttype = $summary['externalrandomreferences'] ? 'danger' : 'success';
-    $summarymessage = $summary['externalrandomreferences']
-        ? get_string('diagnosticsexternalfound', 'local_courseqbankcopy', $summary['externalrandomreferences'])
+    $alerttype = $summary['nonindependentreferences'] ? 'danger' : 'success';
+    $problemcounts = (object) [
+        'external' => $summary['externalfixedreferences'] + $summary['externalrandomreferences'],
+        'invalid' => $summary['invalidfixedreferences'] + $summary['invalidrandomreferences'],
+    ];
+    $summarymessage = $summary['nonindependentreferences']
+        ? get_string('diagnosticsproblemsfound', 'local_courseqbankcopy', $problemcounts)
         : get_string('diagnosticsindependent', 'local_courseqbankcopy');
     echo $OUTPUT->notification($summarymessage, $alerttype);
 
@@ -95,9 +99,20 @@ if ($courseid) {
             (int) $summary['internalsubquestions']],
         [get_string('diagnosticsinternalquestionentries', 'local_courseqbankcopy'),
             (int) $summary['internalquestionentries']],
+        [get_string('diagnosticsfixedreferences', 'local_courseqbankcopy'), (int) $summary['fixedreferences']],
+        [get_string('diagnosticsindependentfixedreferences', 'local_courseqbankcopy'),
+            (int) $summary['independentfixedreferences']],
+        [get_string('diagnosticsexternalfixedreferences', 'local_courseqbankcopy'),
+            (int) $summary['externalfixedreferences']],
+        [get_string('diagnosticsinvalidfixedreferences', 'local_courseqbankcopy'),
+            (int) $summary['invalidfixedreferences']],
         [get_string('diagnosticsrandomreferences', 'local_courseqbankcopy'), (int) $summary['randomreferences']],
-        [get_string('diagnosticsexternalreferences', 'local_courseqbankcopy'),
+        [get_string('diagnosticsindependentrandomreferences', 'local_courseqbankcopy'),
+            (int) $summary['independentrandomreferences']],
+        [get_string('diagnosticsexternalrandomreferences', 'local_courseqbankcopy'),
             (int) $summary['externalrandomreferences']],
+        [get_string('diagnosticsinvalidrandomreferences', 'local_courseqbankcopy'),
+            (int) $summary['invalidrandomreferences']],
         [get_string('diagnosticsmigrationtasks', 'local_courseqbankcopy'), (int) $summary['migrationtasks']],
     ];
     echo html_writer::table($summarytable);
@@ -106,21 +121,43 @@ if ($courseid) {
     $referencetable = new html_table();
     $referencetable->data = [];
     $referencetable->head = [
+        get_string('diagnosticstype', 'local_courseqbankcopy'),
         get_string('diagnosticsquiz', 'local_courseqbankcopy'),
         get_string('diagnosticsslot', 'local_courseqbankcopy'),
+        get_string('diagnosticsbankorcategory', 'local_courseqbankcopy'),
         get_string('diagnosticsquestionscontext', 'local_courseqbankcopy'),
-        get_string('diagnosticscategoryids', 'local_courseqbankcopy'),
         get_string('diagnosticsownercourse', 'local_courseqbankcopy'),
         get_string('diagnosticsstatus', 'local_courseqbankcopy'),
     ];
-    foreach ($report['randomreferences'] as $reference) {
-        $owner = $reference['questionscontext']['ownercourse'] ?? get_string('notavailable');
+    $references = array_merge($report['fixedreferences'], $report['randomreferences']);
+    usort($references, static function (array $left, array $right): int {
+        return [$left['quizname'], $left['slotid'], $left['type']]
+            <=> [$right['quizname'], $right['slotid'], $right['type']];
+    });
+    foreach ($references as $reference) {
+        $owner = $reference['referencecontext']['ownercourse'] ?? get_string('notavailable');
         $status = get_string('diagnosticsstatus' . $reference['status'], 'local_courseqbankcopy');
+        $type = get_string('diagnosticstype' . $reference['type'], 'local_courseqbankcopy');
+        $categorylabels = [];
+        foreach ($reference['categories'] as $category) {
+            $categorylabels[] = $category['exists']
+                ? $category['name'] . ' (#' . $category['id'] . ')'
+                : '#' . $category['id'] . ' (' . get_string('notavailable') . ')';
+        }
+        $bankorcategory = implode(', ', $categorylabels) ?: get_string('notavailable');
+        if ($reference['type'] === 'fixed') {
+            $bankorcategory = get_string(
+                'diagnosticsquestionbankentry',
+                'local_courseqbankcopy',
+                $reference['questionbankentryid'],
+            ) . ' — ' . $bankorcategory;
+        }
         $referencetable->data[] = [
+            s($type),
             s($reference['quizname']),
             (int) $reference['slotid'],
-            (int) $reference['questionscontextid'],
-            s(implode(', ', $reference['categoryids'])),
+            s($bankorcategory),
+            (int) $reference['referencecontextid'],
             s($owner),
             s($status),
         ];
