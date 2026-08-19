@@ -32,7 +32,7 @@ jobs:
           --health-retries 3
 
       mysql:
-        image: ${{ matrix.database == 'mysqli' && matrix.dbimage || '' }}
+        image: ${{ (matrix.database == 'mysqli' || matrix.database == 'mariadb') && matrix.dbimage || '' }}
         env:
           MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
           MYSQL_CHARACTER_SET_SERVER: utf8mb4
@@ -60,7 +60,7 @@ jobs:
           - name: Moodle 5.0 current / PHP 8.4 / MariaDB 10.11
             php: '8.4'
             moodle: MOODLE_500_STABLE
-            database: mysqli
+            database: mariadb
             dbimage: mariadb:10.11
             dbuser: root
             dbport: 3306
