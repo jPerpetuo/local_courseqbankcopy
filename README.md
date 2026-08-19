@@ -2,7 +2,7 @@
 
 Moodle component: `local_courseqbankcopy`
 
-Stable release: `1.0.0`
+Current development release: `1.1.0-beta1`
 
 Independent question bank copy is a local Moodle plugin that changes the native
 `Course > More > Course reuse > Import` workflow so question banks can be copied
@@ -34,12 +34,13 @@ core files.
 
 ## Requirements and compatibility
 
-- Moodle 5.1.x or 5.2.x.
+- Moodle 5.0.x, 5.1.x, or 5.2.x.
 - A PHP version supported by the installed Moodle release.
 - Moodle cron configured and running regularly.
 - No additional Moodle plugins or external services are required.
 
-The automated test matrix covers Moodle 5.1 and 5.2 with MySQL and PostgreSQL.
+The automated test matrix covers Moodle 5.0, 5.1, and 5.2 with MySQL,
+MariaDB, and PostgreSQL.
 Compatibility with additional question type plugins should be validated before
 institution-wide deployment.
 
@@ -259,9 +260,9 @@ decision and its maintenance criteria are documented in
   and database and file storage usage.
 - The administrative diagnostic report is read-only and does not repair
   external or invalid references.
-- The early import-page integration depends on the Moodle 5.1 and 5.2 import
-  form structure and must be reviewed before declaring support for a new major
-  Moodle version.
+- The early import-page integration depends on the Moodle 5.0, 5.1, and 5.2
+  import form structure and must be reviewed before declaring support for a
+  new major Moodle version.
 - Additional third-party question types may require specific compatibility
   testing.
 

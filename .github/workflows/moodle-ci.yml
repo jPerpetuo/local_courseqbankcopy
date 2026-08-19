@@ -49,6 +49,22 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - name: Moodle 5.0.0 / PHP 8.2 / MySQL 8.4
+            php: '8.2'
+            moodle: v5.0.0
+            database: mysqli
+            dbimage: mysql:8.4
+            dbuser: root
+            dbport: 3306
+            behat: false
+          - name: Moodle 5.0 current / PHP 8.4 / MariaDB 10.11
+            php: '8.4'
+            moodle: MOODLE_500_STABLE
+            database: mysqli
+            dbimage: mariadb:10.11
+            dbuser: root
+            dbport: 3306
+            behat: true
           - name: Moodle 5.1.1 / PHP 8.4 / MySQL 8.4
             php: '8.4'
             moodle: v5.1.1
@@ -57,7 +73,7 @@ jobs:
             dbuser: root
             dbport: 3306
             behat: true
-          - name: Moodle 5.1 atual / PHP 8.2 / PostgreSQL 15
+          - name: Moodle 5.1 current / PHP 8.2 / PostgreSQL 15
             php: '8.2'
             moodle: MOODLE_501_STABLE
             database: pgsql
@@ -73,7 +89,7 @@ jobs:
             dbuser: root
             dbport: 3306
             behat: true
-          - name: Moodle 5.2 atual / PHP 8.3 / PostgreSQL 16
+          - name: Moodle 5.2 current / PHP 8.3 / PostgreSQL 16
             php: '8.3'
             moodle: MOODLE_502_STABLE
             database: pgsql
